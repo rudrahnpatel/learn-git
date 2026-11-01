@@ -74,3 +74,23 @@ if (end && go) {
   };
   go.addEventListener('pointerenter', merge); go.addEventListener('focus', merge);
 }
+
+// Theme toggle (System → Light → Dark), the same stored choice as the app (js/theme.js, 'learn-git:theme').
+import { getTheme, setTheme, nextTheme, themeLabel } from '../js/theme.js';
+const THEME_ICON = {
+  system: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg>',
+  light: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5" fill="currentColor"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>',
+  dark: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z" fill="currentColor"/></svg>',
+};
+const themeBtn = document.getElementById('theme-btn');
+function paintThemeBtn(t = getTheme()) {
+  if (!themeBtn) return;
+  themeBtn.innerHTML = THEME_ICON[t];
+  themeBtn.setAttribute('aria-label', themeLabel(t));
+  themeBtn.title = themeLabel(t);
+}
+paintThemeBtn();
+setTheme(getTheme()); // sync the theme-color meta with a pinned choice
+themeBtn?.addEventListener('click', () => { const t = nextTheme(); setTheme(t); paintThemeBtn(t); });
+window.addEventListener('storage', (e) => { if (e.key === 'learn-git:theme') { setTheme(getTheme()); paintThemeBtn(); } });
+document.getElementById('foot-year') && (document.getElementById('foot-year').textContent = new Date().getFullYear());

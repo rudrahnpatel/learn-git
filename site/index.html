@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <script>try { var t = localStorage.getItem('learn-git:theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#f0f6ff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#14141c" media="(prefers-color-scheme: dark)">
@@ -36,6 +37,7 @@
 <header class="top wrap">
   <a class="brand" href="#top" id="top" data-brand-attr="aria-label:NAME"><svg viewBox="0 0 120 140" aria-hidden="true"><use href="#mascot"/></svg><span data-brand="NAME"></span></a>
   <nav aria-label="Main">
+    <button class="theme-btn" id="theme-btn" type="button" aria-label="Theme: system"></button>
     <a class="key small" data-app href="/app">Play now</a>
   </nav>
 </header>
@@ -115,9 +117,9 @@ HEAD is now at 14d2519 add login form
   </section>
 
   <section class="c fork" id="reel" aria-labelledby="c3-h">
-    <svg class="fork-in" viewBox="0 0 48 56" preserveAspectRatio="none" aria-hidden="true"><path d="M1.5 0 V8 C1.5 32 44.5 24 44.5 56" pathLength="1"/></svg>
+    <svg class="fork-in" viewBox="0 0 48 56" preserveAspectRatio="none" aria-hidden="true"><path d="M1.5 0 V8 C1.5 32 46.45 24 46.45 56" pathLength="1"/></svg>
     <span class="lane" aria-hidden="true"></span>
-    <svg class="fork-out" viewBox="0 0 48 56" preserveAspectRatio="none" aria-hidden="true"><path d="M44.5 0 C44.5 32 1.5 24 1.5 48 V56" pathLength="1"/></svg>
+    <svg class="fork-out" viewBox="0 0 48 56" preserveAspectRatio="none" aria-hidden="true"><path d="M46.45 0 C46.45 32 1.5 24 1.5 48 V56" pathLength="1"/></svg>
     <span class="node on-lane" aria-hidden="true"></span>
     <div class="c-text">
       <p class="msg"><span class="branch-tag">reel</span> <span class="sha" aria-hidden="true">c0ffee1</span> feat: 22 seconds of the real app</p>
@@ -198,7 +200,7 @@ HEAD is now at 14d2519 add login form
   </section>
 
   <section class="c merge-sec" id="start" aria-labelledby="c7-h">
-    <svg class="fork-in wl-in" viewBox="0 0 48 56" preserveAspectRatio="none" aria-hidden="true"><path d="M1.5 0 V8 C1.5 32 44.5 24 44.5 56" pathLength="1"/></svg>
+    <svg class="fork-in wl-in" viewBox="0 0 48 56" preserveAspectRatio="none" aria-hidden="true"><path d="M1.5 0 V8 C1.5 32 46.45 24 46.45 56" pathLength="1"/></svg>
     <span class="lane wl-lane" aria-hidden="true"></span>
     <span class="node on-lane you" aria-hidden="true"></span>
     <div class="c-text">
@@ -208,14 +210,31 @@ HEAD is now at 14d2519 add login form
       <p class="go-row"><span class="go-prompt" aria-hidden="true">$ git merge you</span><a class="key" data-app href="/app" id="go">Start the course</a></p>
     </div>
     <div class="cta-twig" aria-hidden="true"><svg viewBox="0 0 120 140"><use href="#mascot"/></svg><p class="cta-say" id="cta-say">Ready when you are.</p></div>
-    <svg class="fork-out wl-out" viewBox="0 0 48 56" preserveAspectRatio="none" aria-hidden="true"><path d="M44.5 0 C44.5 32 1.5 24 1.5 48 V56" pathLength="1"/></svg>
+    <svg class="fork-out wl-out" viewBox="0 0 48 56" preserveAspectRatio="none" aria-hidden="true"><path d="M46.45 0 C46.45 32 1.5 24 1.5 48 V56" pathLength="1"/></svg>
     <span class="node merge final" aria-hidden="true"></span>
     <p class="end-label" aria-hidden="true"><span class="lbl-head">HEAD</span><span class="lbl-main">main</span></p>
   </section>
 </main>
 
-<footer class="wrap">
-  <span data-brand="FOOTER"></span><span>Inter and Martian Mono (SIL OFL). No trackers, no cookies.</span>
+<footer class="foot">
+  <div class="wrap foot-in">
+    <div class="foot-brand">
+      <svg class="foot-twig" viewBox="0 0 120 140" aria-hidden="true"><use href="#mascot"/></svg>
+      <div>
+        <p class="foot-name" data-brand="NAME">learn-git</p>
+        <p class="foot-tag" data-brand="TAGLINE">Learn dev skills like a game, starting with git.</p>
+      </div>
+    </div>
+    <div class="foot-act">
+      <a class="key small" data-app href="/app">Play now</a>
+      <a class="foot-link" href="#top">Back to top ↑</a>
+    </div>
+  </div>
+  <div class="wrap foot-end">
+    <span class="foot-pager" aria-hidden="true">(END)</span>
+    <span>No accounts, no trackers, no cookies. Your progress stays on your device.</span>
+    <span class="foot-fine">© <span id="foot-year">2026</span> <span data-brand="NAME">learn-git</span></span>
+  </div>
 </footer>
 <script src="../site/config.js"></script>
 <script src="../site/brand.js" type="module"></script>

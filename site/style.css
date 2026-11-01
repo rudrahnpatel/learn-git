@@ -20,8 +20,9 @@
   --rx: 10px; --gut: 42px; --lo: 28px;
   color-scheme: light;
 }
+/* dark: follows the system unless the viewer pinned a theme (shared with the app: localStorage 'learn-git:theme') */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --iris: #5050f5; --iris-hover: #4242e6; --iris-text: #9090ff;
     --ink: #f0f0f5; --on-ink: #14141c; --paper: #1c1c27; --chalk: #14141c; --frost: #2b2b3a; --mute: #a3a9bf; --shadow: #000;
     --red: #f25555; --yellow: #f5c518; --sky: #6ec3e2; --pink: #f59ab0; --green: #1d9e57; --sunbeam: #f7d54a;
@@ -30,6 +31,15 @@
     --term-bg: #0c0c12; --term-edge: #2b2b3a; --term-input: #191925;
     color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+    --iris: #5050f5; --iris-hover: #4242e6; --iris-text: #9090ff;
+    --ink: #f0f0f5; --on-ink: #14141c; --paper: #1c1c27; --chalk: #14141c; --frost: #2b2b3a; --mute: #a3a9bf; --shadow: #000;
+    --red: #f25555; --yellow: #f5c518; --sky: #6ec3e2; --pink: #f59ab0; --green: #1d9e57; --sunbeam: #f7d54a;
+    --green-wash: #163f2a; --pink-wash: #452630; --err: #ff8a8a;
+    --lane-0: #7c7cff; --lane-1: #ff6464; --lane-2: #2fc073; --lane-3: #f0b81c; --lane-4: #4fb8da; --lane-5: #f27d90;
+    --term-bg: #0c0c12; --term-edge: #2b2b3a; --term-input: #191925;
+    color-scheme: dark;
 }
 @media (min-width: 900px) { :root { --rx: 22px; --gut: 84px; --lo: 44px; } }
 
@@ -185,7 +195,7 @@ header.top nav { display: flex; align-items: center; gap: 16px; }
 .fork-in { top: 24px; }
 .fork-out { bottom: 40px; }
 .fork-out path { transition-delay: .5s; }
-.lane { position: absolute; left: calc(var(--rx) + var(--lo)); top: 80px; bottom: 96px; width: 3px; background: var(--lane-1); transform-origin: 50% 0; transition: transform .9s ease-out .3s; }
+.lane { position: absolute; left: calc(var(--rx) + var(--lo)); top: 78px; bottom: 94px; width: 3px; background: var(--lane-1); transform-origin: 50% 0; transition: transform .9s ease-out .3s; }
 .c > .node.on-lane { left: calc(var(--rx) + var(--lo) + 1.5px); top: 106px; border-color: var(--lane-1); }
 .c > .node.merge { top: auto; bottom: 40px; margin: 0 0 -9.5px -9.5px; border-width: 5px; }
 .merge-line { position: absolute; left: var(--gut); bottom: 30px; font: 12.5px/1.5 var(--mono); letter-spacing: 0; color: var(--ink); }
@@ -229,9 +239,9 @@ header.top nav { display: flex; align-items: center; gap: 16px; }
 .wk-lbl.head text { fill: var(--on-iris); }
 
 /* Twig peeking out from behind the rail */
-.peek { position: absolute; left: calc(var(--rx) + 4px); bottom: 0; width: 52px; height: 46px; overflow: hidden; z-index: 1; pointer-events: none; }
-.peek svg { width: 52px; height: 61px; display: block; transform: translateY(8px) rotate(8deg); transform-origin: 50% 100%; transition: transform .6s cubic-bezier(.34, 1.56, .64, 1) .6s; }
-.draw .c:not(.in) .peek svg { transform: translateY(52px) rotate(8deg); }
+.peek { position: absolute; left: calc(var(--rx) + 4px); bottom: 0; width: 52px; height: 61px; z-index: 1; pointer-events: none; }
+.peek svg { width: 52px; height: 61px; display: block; transform: rotate(8deg); transform-origin: 50% 100%; transition: transform .6s cubic-bezier(.34, 1.56, .64, 1) .6s, opacity .3s ease .6s; }
+.draw .c:not(.in) .peek svg { transform: translateY(24px) rotate(8deg); opacity: 0; }
 
 /* command card quiz */
 .quiz { background: var(--paper); border: 1px solid var(--frost); border-radius: 24px; padding: 22px; box-shadow: 0 2px 0 0 var(--shadow); max-width: 440px; }
@@ -251,7 +261,7 @@ header.top nav { display: flex; align-items: center; gap: 16px; }
 .merge-sec { padding-top: 96px; padding-left: calc(var(--gut) + var(--lo)); padding-bottom: 140px; }
 .merge-sec::before { bottom: 72px; }
 .merge-sec .fork-in path, .merge-sec .fork-out path { stroke: var(--lane-2); }
-.merge-sec .lane { background: var(--lane-2); bottom: 128px; }
+.merge-sec .lane { background: var(--lane-2); bottom: 126px; }
 .merge-sec .fork-out { bottom: 72px; }
 .merge-sec > .node.on-lane { border-color: var(--lane-2); border-style: dashed; }
 .merge-sec.joined > .node.on-lane { border-style: solid; background: var(--lane-2); }
@@ -278,9 +288,27 @@ header.top nav { display: flex; align-items: center; gap: 16px; }
 .cta-say { background: var(--frost); border-radius: 16px; padding: 8px 12px; font-size: 15px; margin-bottom: 64px; }
 @media (min-width: 900px) { .cta-twig { justify-self: center; } .cta-twig svg { width: 128px; height: 149px; } }
 
-footer { display: flex; flex-wrap: wrap; gap: 8px 24px; justify-content: space-between; padding: 8px 0 48px; color: var(--mute); font-size: 14px; }
+.foot { margin-top: 24px; border-top: 1px solid var(--frost); background: var(--paper); }
+.foot-in { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 24px; padding-top: 40px; padding-bottom: 32px; }
+.foot-brand { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.foot-twig { width: 56px; height: 65px; flex: none; }
+.foot-name { margin: 0; font: 20px var(--mono); letter-spacing: 0; }
+.foot-tag { margin: 4px 0 0; color: var(--mute); font-size: 16px; }
+.foot-act { display: flex; align-items: center; gap: 20px; }
+.foot-link { color: var(--ink); font-size: 15px; text-underline-offset: 4px; }
+.foot-end { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; padding-top: 16px; padding-bottom: 40px; border-top: 1px dashed var(--frost); color: var(--mute); font-size: 14px; }
+.foot-pager { font: 12px/20px var(--mono); letter-spacing: 0; background: var(--ink); color: var(--on-ink); padding: 0 8px; border-radius: 6px; }
+.foot-fine { margin-left: auto; }
+@media (max-width: 640px) { .foot-fine { margin-left: 0; } .foot-act { width: 100%; justify-content: space-between; } }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before { transition: none !important; animation: none !important; }
 }
+
+/* theme toggle in the nav (system → light → dark), same choice as the app */
+.top nav { display: flex; align-items: center; gap: 10px; }
+.theme-btn { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--frost); background: var(--paper); color: var(--ink); display: grid; place-items: center; cursor: pointer; padding: 0; }
+.theme-btn:hover { border-color: var(--mute); }
+.theme-btn:focus-visible { outline: 2px solid var(--iris); outline-offset: 2px; }
+.theme-btn svg { width: 20px; height: 20px; display: block; }
