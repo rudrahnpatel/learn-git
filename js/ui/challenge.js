@@ -152,7 +152,9 @@ export function renderChallenge(root, level, opts = {}) {
   const splitRoom = () => {
     if (!narrow() || view !== 'split') return null;
     const cs = getComputedStyle(graphCard);
-    return { w: graphScroll.clientWidth, h: (work.clientHeight - parseFloat(getComputedStyle(work).rowGap || 0)) * 0.5 - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) };
+    const gap = parseFloat(getComputedStyle(work).rowGap) || 0, termMin = parseFloat(getComputedStyle(termCard).minHeight) || 0;
+    const room = Math.min((work.clientHeight - gap) * 0.5, work.clientHeight - gap - termMin);
+    return { w: graphScroll.clientWidth, h: room - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) };
   };
   const graph = new GraphView(graphScroll, {
     onCommitClick: (id) => { toTyping(); term.insertWord(id); },
