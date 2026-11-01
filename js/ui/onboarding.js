@@ -15,7 +15,9 @@ export function renderOnboarding(root, { onDone }) {
   const stage = h('div', { class: 'onb-stage' });
   const dots = h('div', { class: 'onb-dots' });
   const next = h('button', { class: 'btn primary big', type: 'button', onclick: () => advance() });
-  const el = h('div', { class: 'onboard' }, h('div', { class: 'onb-inner' }, t.el, stage, h('div', { class: 'onb-foot' }, dots, next)));
+  const back = h('button', { class: 'btn ghost onb-back', type: 'button', onclick: () => goBack() }, h('span', { class: 'arr', 'aria-hidden': 'true' }, '← '), 'Back');
+  const el = h('div', { class: 'onboard' }, h('div', { class: 'onb-inner' }, t.el, stage,
+    h('div', { class: 'onb-foot' }, h('div', { class: 'onb-nav' }, back, dots, h('span', { 'aria-hidden': 'true' })), next)));
   root.replaceChildren(el);
 
   const choiceList = (items, sel, onPick, fmt) => h('div', { class: 'onb-opts' }, items.map((it, i) =>
@@ -23,6 +25,7 @@ export function renderOnboarding(root, { onDone }) {
 
   function draw() {
     dots.replaceChildren(...[0, 1, 2].map((i) => h('span', { class: 'dot' + (i === step ? ' on' : i < step ? ' past' : '') })));
+    back.hidden = step === 0;
     if (step === 0) {
       t.say('Hi! I\'m <b>Twig</b>, a tiny branch with big plans.', 'happy');
       stage.replaceChildren(h('h1', { class: 'onb-title' }, 'Learn git in three-minute bites.'),
@@ -44,6 +47,11 @@ export function renderOnboarding(root, { onDone }) {
     }
     stage.classList.remove('enter'); void stage.offsetWidth; stage.classList.add('enter');
   }
+  // Back keeps the answers already picked, so going back and forth never loses a choice.
+  function goBack() {
+    if (step === 0) return;
+    sfx.tap(); step--; draw();
+  }
   function advance() {
     sfx.tap();
     if (step < 2) { step++; draw(); return; }
@@ -55,6 +63,7 @@ export function renderOnboarding(root, { onDone }) {
   }
   const onKey = (e) => {
     if (e.key === 'Enter' && !next.disabled && e.target.tagName !== 'BUTTON') { e.preventDefault(); advance(); }
+    if ((e.key === 'Backspace' || e.key === 'ArrowLeft') && step > 0 && e.target.tagName !== 'INPUT') { e.preventDefault(); goBack(); }
     if (/^[1-4]$/.test(e.key) && step > 0) { const i = Number(e.key) - 1; if (step === 1) placement = i; else goal = i; sfx.tap(); draw(); }
   };
   document.addEventListener('keydown', onKey);
