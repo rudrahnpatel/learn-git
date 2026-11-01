@@ -1,0 +1,3 @@
+Lost 3 commits to git reset --hard? learn-git turns git into a daily game: 338 three-minute exercises, a real git engine with a live commit graph, and Twig cheering you on all the way to "Merged into main!" Coming soon. Like and share, and we ship v1.0 faster.
+
+#git #learntocode #coding #programming #developer #github #webdev #codinglife #comingsoon #gamedev #reels #shorts

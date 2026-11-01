@@ -1,0 +1,14 @@
+{
+  "name": "chest3d",
+  "version": "1.0.0",
+  "description": "Build-time 3D reward chest, pre-rendered to icons/chest/ (not shipped)",
+  "scripts": {
+    "render": "node render.mjs",
+    "serve": "python3 -m http.server 8811"
+  },
+  "type": "commonjs",
+  "dependencies": {
+    "three": "^0.187.0"
+  },
+  "private": true
+}

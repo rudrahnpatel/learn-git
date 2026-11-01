@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f0f6ff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#14141c" media="(prefers-color-scheme: dark)">
+  <!-- BRAND-META:start (generated from site/config.js by `node tools/brand.mjs`; do not hand-edit) -->
+  <title>learn-git: Learn dev skills like a game, starting with git. Free, in your browser</title>
+  <meta name="description" content="Learn dev skills like a game, starting with git: three-minute lessons, a real git engine with a live commit graph, streaks, crates and cherries. Free, runs in your browser, nothing to install.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="learn-git">
+  <meta property="og:title" content="learn-git: Learn dev skills like a game, starting with git">
+  <meta property="og:description" content="Three-minute lessons, a real git engine and a streak to keep alive. Free, in your browser, works offline.">
+  <meta property="og:image" content="/brag-output/brag.jpg">
+  <meta property="og:image:width" content="1080">
+  <meta property="og:image:height" content="1920">
+  <meta property="og:image:alt" content="Twig, the yellow paper-cut mascot with a branching sprout">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="learn-git: Learn dev skills like a game, starting with git">
+  <meta name="twitter:description" content="Three-minute lessons, a real git engine and a streak to keep alive. Free, in your browser, works offline.">
+  <meta name="twitter:image" content="/brag-output/brag.jpg">
+<!-- BRAND-META:end -->
+  <link rel="canonical" href="/">
+  <link rel="icon" type="image/svg+xml" href="../icons/icon.svg">
+  <link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
+  <link rel="preload" href="../fonts/inter-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="../site/style.css">
+  <link rel="modulepreload" href="../site/lesson.js">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><symbol id="mascot" viewBox="0 0 120 140"></symbol></svg>
+
+<header class="top wrap">
+  <a class="brand" href="#top" id="top" data-brand-attr="aria-label:NAME"><svg viewBox="0 0 120 140" aria-hidden="true"><use href="#mascot"/></svg><span data-brand="NAME"></span></a>
+  <nav aria-label="Main">
+    <a class="key small" data-app href="/app">Play now</a>
+  </nav>
+</header>
+
+<section class="hero wrap" aria-labelledby="hero-h">
+  <div class="hero-copy">
+    <p class="kicker"><span class="dot-live" aria-hidden="true"></span>free · in your browser · starting with git</p>
+    <h1 id="hero-h" data-brand="HERO_TITLE"></h1>
+    <p class="lede" data-brand="HERO_LEDE"></p>
+    <p class="hero-cta"><a class="key" data-app href="/app">Start the course</a><span class="hero-fine">Free. Nothing to install. Works offline.</span></p>
+  </div>
+
+  <div class="lesson" id="lesson" role="group" aria-labelledby="lesson-title">
+    <h2 class="sr-only" id="lesson-title">Lesson 1: commit and branch</h2>
+    <div class="lesson-graph" id="lesson-graph" aria-label="Live commit graph"><p class="graph-wait">starting the git engine…</p></div>
+    <div class="coach">
+      <svg class="coach-twig" viewBox="0 0 120 140" aria-hidden="true"><use href="#mascot"/></svg>
+      <p class="coach-line" id="coach" aria-live="polite">hello.txt is staged. Commit it.</p>
+    </div>
+    <div class="term">
+      <button class="term-old" id="term-old" type="button" hidden aria-expanded="false" aria-controls="term-out"></button>
+      <div class="term-out" id="term-out" role="log" aria-live="polite" aria-label="Terminal output"></div>
+      <button class="sug" id="term-sug" type="button"></button>
+      <form class="term-form" id="term-form" autocomplete="off">
+        <span class="prompt" id="term-prompt" aria-hidden="true">(main) $</span>
+        <input class="term-in" id="term-in" type="text" aria-label="Type a git command" aria-describedby="coach term-tip" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="send" placeholder='git commit -m "hello"'>
+        <span class="sr-only" id="term-tip">Press Enter on an empty line to fill in the suggested command.</span>
+        <button class="run" type="submit">Run</button>
+      </form>
+    </div>
+    <div class="lesson-actions">
+      <div class="steps" id="steps" role="img" aria-label="Step 1 of 3: commit"><i></i><i></i><i></i></div>
+      <p class="done-note" id="done-note" hidden>Lesson done · <a data-app href="/app"><span data-stat="EXERCISES"></span> more in the app</a></p>
+      <button class="textbtn play" type="button" id="play">Play it for me</button>
+      <button class="textbtn" type="button" id="reset">Start over</button>
+    </div>
+  </div>
+</section>
+
+<main id="main" class="log wrap">
+  <p class="log-cmd" aria-hidden="true">$ git log --reverse --graph <span class="dim"># the pitch, one commit at a time</span></p>
+
+  <section class="c" id="lessons" aria-labelledby="c1-h">
+    <span class="node" aria-hidden="true"></span>
+    <div class="c-text">
+      <p class="msg"><span class="sha" aria-hidden="true">a1c3f09</span> feat: bite-sized lessons</p>
+      <h2 id="c1-h">Three minutes. One idea per screen.</h2>
+      <p>A lesson is 8 to 12 tiny exercises: read a card, pick an answer, build the command, then type it for real. Miss one and it comes back at the end. No hearts, no lives, no game over.</p>
+    </div>
+    <div class="c-art">
+      <ol class="flow" aria-label="How a lesson flows">
+        <li><span class="flow-n">1</span><span class="flow-t">learn</span><span class="flow-d">one card, one idea</span></li>
+        <li><span class="flow-n">2</span><span class="flow-t">pick</span><span class="flow-d">spot the right one</span></li>
+        <li><span class="flow-n">3</span><span class="flow-t">build</span><span class="flow-d">snap the tiles together</span></li>
+        <li><span class="flow-n">4</span><span class="flow-t">type</span><span class="flow-d">run it in a live repo</span></li>
+      </ol>
+      <p class="flow-foot">~3 min <span class="dim">·</span> <span data-stat="LESSONS"></span> lessons</p>
+    </div>
+  </section>
+
+  <section class="c" id="engine" aria-labelledby="c2-h">
+    <span class="node" aria-hidden="true"></span>
+    <div class="c-text">
+      <p class="msg"><span class="sha" aria-hidden="true">b72e4d1</span> feat: a real git engine</p>
+      <h2 id="c2-h">Not a quiz about git. Git, simulated.</h2>
+      <p><span data-stat="COMMANDS"></span> git commands run against a real repo in your browser: branch, merge with honest conflicts, rebase, reset, reflog, bisect, stash, cherry-pick. Nothing to install, nothing you can break. The terminal at the top of this page is the same engine.</p>
+    </div>
+    <div class="c-art">
+      <pre class="snip" aria-label="Example terminal session: a hard reset, then the reflog shows the lost commits"><span class="p">$</span> git reset --hard HEAD~2
+HEAD is now at 14d2519 add login form
+<span class="p">$</span> git reflog
+<span class="y">14d2519</span> (HEAD -&gt; main) HEAD@{0}: reset: moving to HEAD~2
+<span class="y">6022e40</span> HEAD@{1}: commit: fix typo
+<span class="y">174afa1</span> HEAD@{2}: commit: validate email
+<span class="note"># phew. nothing is ever really gone.</span></pre>
+    </div>
+  </section>
+
+  <section class="c fork" id="reel" aria-labelledby="c3-h">
+    <svg class="fork-in" viewBox="0 0 48 56" preserveAspectRatio="none" aria-hidden="true"><path d="M1.5 0 V8 C1.5 32 44.5 24 44.5 56" pathLength="1"/></svg>
+    <span class="lane" aria-hidden="true"></span>
+    <svg class="fork-out" viewBox="0 0 48 56" preserveAspectRatio="none" aria-hidden="true"><path d="M44.5 0 C44.5 32 1.5 24 1.5 48 V56" pathLength="1"/></svg>
+    <span class="node on-lane" aria-hidden="true"></span>
+    <div class="c-text">
+      <p class="msg"><span class="branch-tag">reel</span> <span class="sha" aria-hidden="true">c0ffee1</span> feat: 22 seconds of the real app</p>
+      <h2 id="c3-h">22 seconds, no mock-ups.</h2>
+      <p>Recorded from the game itself: a <code>git reset --hard</code> panic, the reflog rescue, the lesson path and a live merge. Sound off, it still makes sense.</p>
+    </div>
+    <figure class="reel">
+      <div class="phone">
+        <video muted loop playsinline preload="none" poster="../brag-output/brag.jpg" aria-label="Trailer: 22 seconds of the game">
+          <source src="../brag-output/brag.mp4" type="video/mp4">
+        </video>
+      </div>
+      <button class="textbtn reel-toggle" type="button">Play reel</button>
+    </figure>
+    <p class="merge-line" aria-hidden="true"><span class="sha">d3adb0b</span> Merge branch 'reel'</p>
+    <span class="node merge" aria-hidden="true"></span>
+  </section>
+
+  <section class="c" id="streaks" aria-labelledby="c4-h">
+    <span class="node" aria-hidden="true"></span>
+    <div class="peek" aria-hidden="true"><svg viewBox="0 0 120 140"><use href="#mascot"/></svg></div>
+    <div class="c-text">
+      <p class="msg"><span class="sha" aria-hidden="true">e4f1a2c</span> feat: streaks you'll want to keep</p>
+      <h2 id="c4-h">Your streak is a commit line.</h2>
+      <p>Hit your daily goal and the line grows one commit. <span data-brand="REWARDS_LINE"></span></p>
+    </div>
+    <div class="c-art">
+      <svg class="week" viewBox="0 0 340 92" role="img" aria-labelledby="week-t">
+        <title id="week-t">A week of streak drawn as commits: six days done, one missed day covered, today is HEAD</title>
+        <path d="M20 46 H320" class="wk-line"/>
+        <g class="wk-done"><circle cx="20" cy="46" r="9"/><circle cx="70" cy="46" r="9"/><circle cx="120" cy="46" r="9"/></g>
+        <circle cx="170" cy="46" r="9" class="wk-saved"/>
+        <g class="wk-done"><circle cx="220" cy="46" r="9"/><circle cx="270" cy="46" r="9"/></g>
+        <circle cx="320" cy="46" r="15" class="wk-ring"/><circle cx="320" cy="46" r="9" class="wk-head"/>
+        <g class="wk-days"><text x="20" y="80">M</text><text x="70" y="80">T</text><text x="120" y="80">W</text><text x="170" y="80">T</text><text x="220" y="80">F</text><text x="270" y="80">S</text><text x="320" y="80">S</text></g>
+        <g class="wk-lbl"><rect x="140" y="6" width="60" height="18" rx="9"/><text x="170" y="19" id="wk-saver">stash</text></g>
+        <g class="wk-lbl head"><rect x="290" y="0" width="60" height="18" rx="9"/><text x="320" y="13">today</text></g>
+      </svg>
+    </div>
+  </section>
+
+  <section class="c" id="cards" aria-labelledby="c5-h">
+    <span class="node" aria-hidden="true"></span>
+    <div class="c-text">
+      <p class="msg"><span class="sha" aria-hidden="true">f9e8a7b</span> feat: command cards</p>
+      <h2 id="c5-h">Commands you'll type at work tomorrow.</h2>
+      <p>Tap the right command, fill the blank, match each one to what it does. Every card is a real command, so the muscle memory comes with you. Try one:</p>
+    </div>
+    <div class="c-art">
+      <div class="quiz" id="quiz">
+        <p class="quiz-q" id="quiz-q">Undo the last commit, but keep its changes staged.</p>
+        <p class="quiz-cmd" aria-hidden="true">git reset --<span class="blank" id="quiz-blank">____</span> HEAD~1</p>
+        <div class="quiz-opts" role="group" aria-labelledby="quiz-q">
+          <button type="button" class="opt" data-a="hard">hard</button>
+          <button type="button" class="opt" data-a="soft">soft</button>
+          <button type="button" class="opt" data-a="mixed">mixed</button>
+        </div>
+        <p class="quiz-fb" id="quiz-fb" aria-live="polite"></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="c" id="numbers" aria-labelledby="c6-h">
+    <span class="node" aria-hidden="true"></span>
+    <div class="c-text">
+      <p class="msg"><span class="sha" aria-hidden="true">0ff1ce0</span> chore: count everything</p>
+      <h2 id="c6-h">What's in the box.</h2>
+      <p>Works offline once it's loaded, in light and dark. Git is the first course; more dev skills follow the same way.</p>
+    </div>
+    <div class="c-art">
+      <pre class="snip short"><span class="p">$</span> git shortlog -sn
+<span class="n" data-stat="EXERCISES"></span>  exercises
+<span class="n" data-stat="LESSONS"></span>  lessons
+<span class="n" data-stat="CHALLENGES"></span>  challenge levels
+<span class="n" data-stat="UNITS"></span>  units, init to bisect
+<span class="n">1</span>  very supportive sprout</pre>
+    </div>
+  </section>
+
+  <section class="c merge-sec" id="start" aria-labelledby="c7-h">
+    <svg class="fork-in wl-in" viewBox="0 0 48 56" preserveAspectRatio="none" aria-hidden="true"><path d="M1.5 0 V8 C1.5 32 44.5 24 44.5 56" pathLength="1"/></svg>
+    <span class="lane wl-lane" aria-hidden="true"></span>
+    <span class="node on-lane you" aria-hidden="true"></span>
+    <div class="c-text">
+      <p class="msg"><span class="branch-tag wl">you</span> Merge branch 'you' into main</p>
+      <h2 id="c7-h">Merge yourself into main.</h2>
+      <p><span data-brand="NAME"></span> is free and runs in your browser. Nothing to install, and it works offline once it's loaded. Lesson one takes three minutes.</p>
+      <p class="go-row"><span class="go-prompt" aria-hidden="true">$ git merge you</span><a class="key" data-app href="/app" id="go">Start the course</a></p>
+    </div>
+    <div class="cta-twig" aria-hidden="true"><svg viewBox="0 0 120 140"><use href="#mascot"/></svg><p class="cta-say" id="cta-say">Ready when you are.</p></div>
+    <svg class="fork-out wl-out" viewBox="0 0 48 56" preserveAspectRatio="none" aria-hidden="true"><path d="M44.5 0 C44.5 32 1.5 24 1.5 48 V56" pathLength="1"/></svg>
+    <span class="node merge final" aria-hidden="true"></span>
+    <p class="end-label" aria-hidden="true"><span class="lbl-head">HEAD</span><span class="lbl-main">main</span></p>
+  </section>
+</main>
+
+<footer class="wrap">
+  <span data-brand="FOOTER"></span><span>Inter and Martian Mono (SIL OFL). No trackers, no cookies.</span>
+</footer>
+<script src="../site/config.js"></script>
+<script src="../site/brand.js" type="module"></script>
+<script src="../site/page.js" type="module"></script>
+<script src="../site/lesson.js" type="module"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+# Design notes, specs and the feature backlog: local only, never committed or deployed
+.notes/
+
+# /brag render work files (keep brag.mp4 / brag.jpg)
+brag-output/composition/
+brag-output/captures/
+
+# build-time 3D chest renderer deps (tools/chest3d, npm install there)
+tools/chest3d/node_modules/

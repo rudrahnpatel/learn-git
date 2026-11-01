@@ -1,0 +1,97 @@
+// A small development fixture in the same shape as js/content/index.js (export UNITS). The app
+// only uses it when the real content bank is missing or fails to load. It uses every exercise type.
+export const UNITS = [
+  {
+    id: 'basics', title: 'Basics', blurb: 'Working tree, index, commit: the three places every file lives.', color: 'yellow',
+    lessons: [
+      {
+        id: 'fx-basics-1', title: 'Three places',
+        exercises: [
+          { id: 'fx-b1-learn', type: 'learn', new: true, title: 'A commit is a snapshot',
+            body: 'Git keeps your project in three places: the <b>working tree</b> (your files), the <b>index</b> (the draft of your next commit) and <b>HEAD</b> (the last commit). <code>git commit</code> turns the index into a new commit.',
+            demo: { setup(r) { r.setupCommit('Initial commit', { 'README.md': 'hi' }); r.setupFiles({ 'app.js': 'start()' }); r.sh('git add app.js'); }, run: ['git commit -m "Add app"'] },
+            explain: '' },
+          { id: 'fx-b1-choice', type: 'choice', prompt: 'Which command copies a file from the working tree into the index?',
+            options: ['git commit', 'git add', 'git push', 'git status'], answer: 1,
+            explain: '<code>git add</code> stages a file: it copies its current content into the index.' },
+          { id: 'fx-b1-build', type: 'build', prompt: 'Commit what is staged with the message "Fix bug".',
+            tiles: ['git', 'commit', '-m', '"Fix bug"', 'add', 'push', '--amend'],
+            answers: [['git', 'commit', '-m', '"Fix bug"']],
+            explain: '<code>git commit -m "msg"</code> saves the index as a commit with that message.' },
+          { id: 'fx-b1-fill', type: 'fill', prompt: 'Show the changes that are staged for the next commit.',
+            before: 'git diff ', after: '', options: ['--staged', '--all', 'HEAD~1', '--hard'], answer: 0,
+            explain: '<code>git diff --staged</code> compares the index with HEAD.' },
+          { id: 'fx-b1-match', type: 'match', prompt: 'Match each place to what it holds.',
+            pairs: [['working tree', 'the files you edit'], ['index', 'your next commit, drafted'], ['HEAD', 'the last commit'], ['stash', 'parked changes']],
+            explain: 'Three trees plus the stash: every change lives in one of these.' },
+          { id: 'fx-b1-order', type: 'order', prompt: 'Put the everyday loop in order.',
+            steps: ['edit a file', 'git add the file', 'git commit -m "…"', 'git push'],
+            explain: 'Edit, stage, commit, then share.' },
+          { id: 'fx-b1-graph', type: 'graph', new: true, prompt: 'Which graph do you get?',
+            setup(r) { r.setupCommit('Initial commit', { 'a.txt': '1' }); r.setupFiles({ 'a.txt': '2' }); },
+            command: 'git commit -am "Edit a"',
+            distractors: [['git switch -c edit', 'git commit -am "Edit a"'], []],
+            explain: 'A commit on <code>main</code> adds one node and moves <code>main</code> forward.' },
+          { id: 'fx-b1-type', type: 'type', prompt: 'Stage <code>notes.txt</code> and commit it with any message.',
+            setup(r) { r.setupCommit('Initial commit', { 'README.md': 'hi' }); r.setupFiles({ 'notes.txt': 'remember milk' }); },
+            check: (r) => r.tree(r.headId())['notes.txt'] !== undefined,
+            solution: 'git add notes.txt && git commit -m "Add notes"',
+            explain: 'Add it to the index, then commit the index.' },
+        ],
+      },
+      {
+        id: 'fx-basics-2', title: 'Look before you leap',
+        exercises: [
+          { id: 'fx-b2-choice', type: 'choice', prompt: 'What does this print?', code: '$ git status\nOn branch main\nUntracked files:\n  todo.txt',
+            options: ['todo.txt is staged', 'git does not track todo.txt yet', 'todo.txt was deleted'], answer: 1,
+            explain: 'Untracked means git has never seen this file in the index or a commit.' },
+          { id: 'fx-b2-fill', type: 'fill', prompt: 'Throw away your unstaged edits to app.js.', before: 'git ', after: ' app.js', options: ['restore', 'reset --hard', 'stash', 'rm'], answer: 0,
+            explain: '<code>git restore file</code> copies the index version back over your working copy.' },
+          { id: 'fx-b2-build', type: 'build', prompt: 'Unstage app.js but keep your edits.', tiles: ['git', 'restore', '--staged', 'app.js', '--hard', 'reset'],
+            answers: [['git', 'restore', '--staged', 'app.js'], ['git', 'reset', 'app.js']],
+            explain: '<code>git restore --staged</code> copies HEAD back into the index and leaves your file alone.' },
+        ],
+      },
+      {
+        id: 'fx-basics-3', title: 'Commit every change',
+        exercises: [
+          { id: 'fx-b3-choice', type: 'choice', prompt: 'What does <code>git commit -a</code> skip?', options: ['modified files', 'deleted files', 'untracked files'], answer: 2,
+            explain: '<code>-a</code> stages tracked files only. New files still need <code>git add</code>.' },
+          { id: 'fx-b3-type', type: 'type', prompt: 'Commit every tracked change in one command.',
+            setup(r) { r.setupCommit('Initial commit', { 'a.txt': '1', 'b.txt': '1' }); r.setupFiles({ 'a.txt': '2', 'b.txt': '2' }); },
+            check: (r) => r.isClean() && r.tree(r.headId())['a.txt'] === '2\n', solution: 'git commit -am "Update a and b"', accept: ['^git commit -a(m| -m) '],
+            explain: '<code>git commit -am</code> stages modified tracked files and commits in one go.' },
+        ],
+      },
+    ],
+    challenges: ['first-commit', 'stage-selectively'],
+  },
+  {
+    id: 'branching', title: 'Branching & merging', blurb: 'Cheap branches, fast-forwards and real merges.', color: 'sky',
+    lessons: [
+      {
+        id: 'fx-branch-1', title: 'Sticky notes',
+        exercises: [
+          { id: 'fx-br1-learn', type: 'learn', new: true, title: 'A branch is a sticky note', body: 'A branch is just a name pointing at a commit. Committing moves the branch you are on forward.',
+            demo: { setup(r) { r.setupCommit('Initial commit', { 'a.txt': '1' }); }, run: ['git switch -c idea', 'git commit --allow-empty -m "Try idea"'] }, explain: '' },
+          { id: 'fx-br1-choice', type: 'choice', prompt: 'Which command creates a branch and switches to it?', options: ['git branch -d x', 'git switch -c x', 'git merge x'], answer: 1,
+            explain: '<code>git switch -c</code> creates and switches in one go.' },
+          { id: 'fx-br1-graph', type: 'graph', prompt: 'Which graph do you get?',
+            setup(r) { r.setupCommit('Initial commit', { 'a.txt': '1' }); r.sh('git switch -c feature'); r.setupCommit('Feature work', { 'b.txt': 'b' }); r.sh('git switch main'); },
+            command: 'git merge feature', distractors: [['git merge --no-ff feature -m "Merge feature"'], ['git rebase feature']],
+            explain: 'main has no new commits, so the merge just fast-forwards the label.' },
+        ],
+      },
+      {
+        id: 'fx-branch-2', title: 'Merging',
+        exercises: [
+          { id: 'fx-br2-order', type: 'order', prompt: 'Order the steps to merge feature into main.', steps: ['git switch main', 'git merge feature', 'git branch -d feature'],
+            explain: 'Stand on the branch that receives the work, merge, then tidy up.' },
+          { id: 'fx-br2-match', type: 'match', prompt: 'Match each merge to its result.', pairs: [['fast-forward', 'label moves, no new commit'], ['--no-ff', 'always a merge commit'], ['conflict', 'you decide the lines'], ['--abort', 'back to before the merge']],
+            explain: 'Most merges are one of these.' },
+        ],
+      },
+    ],
+    challenges: ['first-branch', 'fast-forward'],
+  },
+];

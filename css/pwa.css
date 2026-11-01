@@ -1,0 +1,19 @@
+/* PWA chrome: update toast, install / reminder pills. Uses the app's tokens (with fallbacks). */
+#pwa-corner { position: fixed; left: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); z-index: 40; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+#pwa-corner:empty { display: none; }
+/* discreet: only on the calm screens, never over a lesson, a celebration or a challenge */
+body:not([data-screen="home"]):not([data-screen="practice"]) #pwa-corner { display: none; }
+@media (max-width: 760px) { #pwa-corner { bottom: calc(84px + env(safe-area-inset-bottom)); } }
+.pwa-pill { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--frost, #e1edff); background: var(--paper, #fff); color: var(--ink, #111118); border-radius: 48px; padding: 6px 14px; font: 400 14px/1.2 var(--sans, system-ui, sans-serif); letter-spacing: -0.01em; cursor: pointer; box-shadow: 0 2px 0 0 var(--shadow, #111118); transition: transform .08s ease, box-shadow .08s ease; }
+.pwa-pill:hover { text-decoration: underline; text-underline-offset: 3px; }
+.pwa-pill:active { transform: translateY(2px); box-shadow: 0 0 0 0 var(--shadow, #111118); }
+.pwa-pill:focus-visible, .pwa-toast button:focus-visible { outline: 2px solid var(--iris, #2727e6); outline-offset: 2px; }
+
+.pwa-toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 90; display: flex; align-items: center; gap: 12px; max-width: calc(100vw - 32px); background: var(--ink, #111118); color: var(--on-ink, #fff); border-radius: 48px; padding: 8px 8px 8px 20px; font: 400 16px/1.3 var(--sans, system-ui, sans-serif); letter-spacing: -0.015em; box-shadow: 0 3px 0 0 var(--iris, #2727e6); animation: pwa-in .4s cubic-bezier(.34, 1.56, .64, 1); }
+.pwa-toast span { white-space: nowrap; }
+.pwa-toast button { border: 0; border-radius: 48px; padding: 8px 16px; font: inherit; cursor: pointer; background: var(--iris, #2727e6); color: var(--on-iris, #fff); white-space: nowrap; }
+.pwa-toast .pwa-later { background: transparent; color: inherit; padding: 8px 12px; }
+.pwa-toast .pwa-later:hover { text-decoration: underline; }
+@media (max-width: 760px) { .pwa-toast { bottom: calc(132px + env(safe-area-inset-bottom)); } }
+@keyframes pwa-in { from { opacity: 0; transform: translate(-50%, 16px); } }
+@media (prefers-reduced-motion: reduce) { .pwa-toast { animation: none; } }
