@@ -10,6 +10,7 @@ import { UNITS } from './path.js';
 import { APP, MASCOT, REWARDS } from '../brand.js';
 import { COURSE } from '../content/cards.js';
 import * as game from './game.js';
+import { accountCard } from './account.js';
 
 const DOW = ['Mon', '', 'Wed', '', 'Fri', '', ''];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -134,7 +135,7 @@ export function renderProfile(root) {
       return h('div', { class: 'badge' + (got ? ' got' : ''), title: `${a.title}: ${a.text}`, style: got ? { '--fill': accent(a.color) } : {} },
         h('span', { class: 'badge-disc', html: got ? ICON.trophy() : ICON.lock() }), h('span', { class: 'badge-t' }, a.title));
     })));
-  root.replaceChildren(topbar('profile'), h('main', { class: 'profile' }, head, stats, heatmap(), ach));
+  root.replaceChildren(topbar('profile'), h('main', { class: 'profile' }, head, stats, heatmap(), accountCard(), ach));
   return null;
 }
 

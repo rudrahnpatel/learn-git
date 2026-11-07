@@ -400,7 +400,7 @@ function type(ex, ctx) {
     grade: () => {
       let ok = false;
       try { ok = !!ex.check(repo); } catch { ok = false; }
-      return { ok, answer: ex.solution, mono: true, typed: true };
+      return { ok, answer: ex.solution, mono: true, typed: true, note: ok ? null : nameSlip(ex.prompt, repo) };
     },
     key: () => false,
     lock: () => { locked = true; term.input.disabled = true; },
@@ -415,4 +415,29 @@ export function renderExercise(ex, ctx) {
   if (f) { const r = f(ex, ctx); r.el.dataset.type = ex.type; r.el.__ex = ex; return r; }
   if (!f) return { el: h('div', { class: 'ex' }, h('p', {}, `Unknown exercise type: ${esc(ex.type)}`)), ready: () => true, grade: () => ({ ok: true }), key: () => false, lock() {} };
   return f(ex, ctx);
+}
+
+// A failed typed exercise only knows pass/fail, so the sheet can only show the model answer. The
+// commonest slip is a misspelt name (darkmode for dark-mode), which is easy to miss next to an answer
+// that looks the same. This compares the names the prompt asks for (<code>…</code>) with the branches
+// and tags that exist now, and names a near miss: same letters ignoring case/-/_ , or one or two typos.
+export function nameSlip(prompt, repo) {
+  const s = repo?.s;
+  if (!s || typeof prompt !== 'string') return null;
+  const asked = [...prompt.matchAll(/<code>([^<\s]+)<\/code>/g)].map((m) => m[1]).filter((n) => /^[\w./-]+$/.test(n));
+  const have = [...Object.keys(s.branches || {}), ...Object.keys(s.tags || {})];
+  const norm = (n) => n.toLowerCase().replace(/[-_./]/g, '');
+  for (const want of asked) {
+    if (have.includes(want)) continue;
+    const got = have.find((n) => !asked.includes(n) && (norm(n) === norm(want) || (want.length > 3 && editDistance(n, want) <= 2)));
+    if (got) return `Close! The task asks for ${want}, but you named it ${got}. Names have to match exactly.`;
+  }
+  return null;
+}
+function editDistance(a, b) {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++)
+    d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[a.length][b.length];
 }

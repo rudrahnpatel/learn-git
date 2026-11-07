@@ -2,7 +2,7 @@
 
 A static web app that teaches git, from the first commit up to bisect and force-with-lease, as a daily game. A winding path of three-minute lessons (one exercise per screen, instant feedback), challenge nodes where you type real git commands into a simulated repository, and a git-flavoured reward layer to bring you back tomorrow: a streak drawn as your own commit line, daily quests, cherries to cherry-pick, release tags to ship, stashes that save a missed day, and achievements. Twig, a paper-cut sprout, cheers you on. The look follows a SuperHi-style "paper-cut classroom wall": light canvas, flat candy-coloured shapes, one electric violet for every action, with a matching dark mode (follows the system, or pick Light / Dark in the top bar).
 
-It is plain static files: ES modules, one CSS file and two vendored fonts (Inter and Martian Mono, SIL OFL, in `fonts/`). There is no build step, no npm and no CDN, so it works offline and can be served from any static file server at any path (all URLs are relative).
+It is plain static files: ES modules, one CSS file and two vendored fonts (Inter and Martian Mono, SIL OFL, in `fonts/`). There is no build step, no npm and no CDN, so it works offline and can be served from any static file server at any path (all URLs are relative). The one exception is optional: Google sign-in and cross-device progress sync (Supabase) load `supabase-js` from a CDN, and only for someone who signs in. With `js/cloud/config.js` left empty (the default) the app is local-only and every account feature hides itself. Setup: [`supabase/README.md`](supabase/README.md).
 
 ```sh
 python3 -m http.server 8801 --directory .   # then open http://localhost:8801/
@@ -62,10 +62,21 @@ js/speed.js             speed-round questions and screen
 js/storage.js           localStorage (every access in try/catch); v2 state, v1 migration, course-aware layer,
                         backup-before-replace for unreadable saves
 js/dom.js               tiny DOM helpers, the modal and our own confirm dialog
+js/cloud/config.js      Supabase URL + anon key (empty = accounts off) and the pinned supabase-js CDN URL
+js/cloud/client.js      lazy Supabase client (the SDK is imported only when needed), Google OAuth (PKCE)
+js/cloud/merge.js       mergeStates(a, b): the field-by-field merge of two saves (pure)
+js/cloud/sync.js        sync engine: debounced push, optimistic concurrency on rev, flush on online/visibility
+js/ui/path-nodes.js     buildNodes(UNITS): the path's node ids and titles (shared by the game and /admin)
+js/ui/account.js        profile account card, "Save your progress" nudge, sign-out/delete, cloud-aware reset
+admin/                  /admin: users, an edit drawer (progress, lessons, course reset, admin rights, ban), delete;
+                        for emails in the admins table (online-only, not precached)
+supabase/schema.sql     progress table + RLS, admins, delete_my_account(), is_admin(), admin_* functions
 tests/git.test.mjs      engine tests (merge, rebase, reset, reflog, stash, cherry-pick, remotes, bisect)
 tests/levels.test.mjs   plays every level's solution against its checker; checks speed-round answers
 tests/content.test.mjs  validates the exercise bank
 tests/cards.test.mjs    command cards: fields, rarity, every unlockedBy lesson exists, every lesson unlocks a card
+tests/merge.test.mjs    the sync merge rules, idempotence and commutativity
+tests/sync.test.mjs     the sync engine against an in-memory fake of supabase-js
 icons/chest/            the reward chest, pre-rendered from a three.js model (tools/chest3d, build time only)
 ```
 
@@ -84,7 +95,12 @@ Run the tests with plain node (no dependencies):
 node tests/git.test.mjs
 node tests/levels.test.mjs
 node tests/content.test.mjs
+node tests/cards.test.mjs
+node tests/merge.test.mjs
+node tests/sync.test.mjs
 ```
+
+or all of them at once with `node --test tests/`.
 
 ## The engine in one paragraph
 

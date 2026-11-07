@@ -33,6 +33,21 @@
       "dest": "/index.html"
     },
     {
+      "src": "/admin/",
+      "status": 308,
+      "headers": {
+        "Location": "/admin"
+      }
+    },
+    {
+      "src": "/admin",
+      "dest": "/admin/index.html",
+      "headers": {
+        "x-robots-tag": "noindex",
+        "cache-control": "public, max-age=0, must-revalidate"
+      }
+    },
+    {
       "handle": "filesystem"
     }
   ]

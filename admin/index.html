@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="robots" content="noindex, nofollow">
+  <!-- Same pre-paint theme as the app (index.html). -->
+  <script>try { var t = localStorage.getItem('learn-git:theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+  <title>Admin · learn-git</title>
+  <link rel="icon" href="/icons/icon.svg">
+  <link rel="stylesheet" href="/css/style.css">
+  <style>
+    /* /admin only (online-only, not precached). App tokens and components from css/style.css. */
+    .admin { max-width: 1200px; margin: 0 auto; padding: 32px 24px 80px; display: flex; flex-direction: column; gap: 20px; }
+    .admin-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .admin-top h1 { font-size: 46px; }
+    .admin-top .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font-size: 18px; }
+    .admin-tools { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .admin-search { font: 400 16px/1.2 var(--sans); padding: 10px 16px; border-radius: 48px; border: 1px solid var(--frost-2); background: var(--paper); color: var(--ink); min-width: 0; flex: 1 1 220px; }
+    .admin-msg { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+    .admin-msg p { color: var(--mute); font-size: 18px; max-width: 620px; }
+    .table-wrap { overflow-x: auto; border-radius: 24px; border: 1px solid var(--frost); background: var(--paper); box-shadow: var(--shadow-card); }
+    table.users { border-collapse: collapse; width: 100%; min-width: 820px; font-size: 15px; }
+    .users th { text-align: left; font: 12px/17px var(--mono); text-transform: uppercase; color: var(--mute); padding: 14px 14px 10px; border-bottom: 1px solid var(--frost); white-space: nowrap; }
+    .users td { padding: 12px 14px; border-bottom: 1px solid var(--frost); vertical-align: middle; }
+    .users tr:last-child td { border-bottom: 0; }
+    .users td.ncol { font-family: var(--mono); letter-spacing: 0; text-align: right; }
+    .users th.ncol { text-align: right; }
+    .users .who { display: flex; align-items: center; gap: 12px; min-width: 220px; }
+    .users .who img, .users .who .ini { width: 36px; height: 36px; border-radius: 50%; flex: none; object-fit: cover; background: var(--frost); }
+    .users .who .ini { display: inline-grid; place-items: center; background: var(--yellow); color: var(--on-accent); }
+    .users .who span { display: flex; flex-direction: column; min-width: 0; }
+    .users .who small { color: var(--mute); font-size: 13px; overflow-wrap: anywhere; }
+    .users .when { white-space: nowrap; color: var(--mute); font-size: 14px; }
+    .users .del { color: var(--err); }
+    .users .del:disabled { background: transparent; box-shadow: none; color: var(--disabled-t); }
+    .count { color: var(--mute); }
+    .row-actions { display: flex; gap: 4px; justify-content: flex-end; }
+    .users .who .tag-pill, .drawer-head .tag-pill { font: 11px/15px var(--mono); padding: 2px 8px; letter-spacing: 0; align-self: flex-start; }
+    .tag-pill.is-admin { background: var(--iris); color: var(--on-iris); }
+    .tag-pill.is-banned { background: var(--bad-wash); color: var(--ink); }
+    .pills, .users .who .pills { display: flex; flex-direction: row; gap: 6px; flex-wrap: wrap; margin-top: 3px; }
+    .users .who .pills .tag-pill { display: inline-flex; }
+
+    /* edit drawer: a panel from the right on wide screens, the whole screen on phones */
+    .drawer-wrap { position: fixed; inset: 0; z-index: 40; background: var(--overlay); display: flex; justify-content: flex-end; animation: fade .2s; }
+    .drawer { background: var(--chalk); width: min(600px, 100%); height: 100%; overflow-y: auto; overscroll-behavior: contain; padding: 24px; display: flex; flex-direction: column; gap: 16px; box-shadow: -4px 0 0 0 var(--shadow); animation: drawer-in .25s ease-out; }
+    @keyframes drawer-in { from { transform: translateX(48px); opacity: 0; } }
+    .drawer-head { display: flex; align-items: center; gap: 12px; }
+    .drawer-head img, .drawer-head .ini { width: 48px; height: 48px; border-radius: 50%; flex: none; object-fit: cover; display: inline-grid; place-items: center; background: var(--yellow); color: var(--on-accent); font-size: 20px; }
+    .drawer-head .who-t { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .drawer-head h2 { font-size: 26px; overflow-wrap: anywhere; }
+    .drawer-head small { color: var(--mute); font-size: 14px; overflow-wrap: anywhere; }
+    .drawer .card { padding: 18px 20px; }
+    .drawer h3 { font-size: 22px; }
+    .drawer .card-head { margin-bottom: 10px; }
+    .drawer .hint { color: var(--mute); font-size: 14px; margin-top: 4px; }
+    .num-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 12px; }
+    .num-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+    .num-field input { font: 400 20px/1.2 var(--mono); letter-spacing: 0; padding: 10px 14px; border-radius: 16px; border: 1px solid var(--frost-2); background: var(--paper); color: var(--ink); width: 100%; min-width: 0; }
+    .num-field input.changed { border-color: var(--iris); outline: 1px solid var(--iris); }
+    .num-field .was { font: 11px/15px var(--mono); color: var(--mute); min-height: 15px; }
+    .drawer-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; align-items: center; margin-top: 14px; }
+    .unit-group + .unit-group { margin-top: 14px; }
+    .unit-group > .tiny { display: block; margin-bottom: 4px; }
+    .node-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--frost); min-height: 44px; }
+    .node-row:last-child { border-bottom: 0; }
+    .node-row .t { flex: 1; min-width: 0; font-size: 15px; overflow-wrap: anywhere; }
+    .node-row .t small { color: var(--mute); font: 11px/15px var(--mono); margin-left: 6px; }
+    .node-row.changed .t { color: var(--iris-text); }
+    .node-row label.done { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--mute); cursor: pointer; }
+    .node-row input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--iris); cursor: pointer; }
+    .node-row select { font: 400 14px/1.2 var(--mono); padding: 6px 8px; border-radius: 12px; border: 1px solid var(--frost-2); background: var(--paper); color: var(--ink); }
+    .node-row .stars-ro { font-size: 14px; color: var(--mute); }
+    .acct-rows { display: flex; flex-direction: column; gap: 12px; }
+    .acct-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: space-between; }
+    .acct-row p { flex: 1 1 240px; color: var(--mute); font-size: 15px; }
+    .danger-t, .drawer .del { color: var(--err); }
+    @media (max-width: 760px) {
+      .admin { padding: 20px 16px 64px; gap: 16px; }
+      .admin-top h1 { font-size: 34px; }
+      .drawer { padding: 16px; box-shadow: none; }
+      .num-grid { grid-template-columns: 1fr 1fr; }
+      .drawer-actions .btn { flex: 1 1 auto; }
+    }
+    @media (prefers-reduced-motion: reduce) { .drawer, .drawer-wrap { animation: none; } }
+  </style>
+</head>
+<body data-screen="admin">
+  <main class="admin" id="admin"><p class="muted">Loading…</p></main>
+  <div id="modal-root"></div>
+  <div id="fx" aria-live="polite"></div>
+  <script type="module" src="/admin/admin.js"></script>
+</body>
+</html>

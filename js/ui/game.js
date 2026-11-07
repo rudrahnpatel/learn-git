@@ -14,8 +14,14 @@ import { ITEMS, itemById } from './cosmetics.js';
 import { CARDS } from '../content/cards.js';
 
 export let G = loadState();
-export const save = () => saveState(G);
+// Cloud sync (js/cloud/) sets a hook while someone is signed in: it stamps the save and queues a push.
+// Guests never have one, so for them save() is exactly saveState(G).
+let saveHook = null;
+export const setSaveHook = (fn) => { saveHook = fn; };
+export const save = () => { saveHook?.(G); return saveState(G); };
 export function resetAll() { resetState(); G = loadState(); }
+// Adopts a merged state from the cloud (it already contains everything in G).
+export function replaceState(s) { G = s; saveState(G); }
 // Another tab saved: adopt its state, so this tab's next save can't write stale progress over it.
 try { window.addEventListener('storage', (e) => { if (e.key === STATE_KEY && e.newValue) G = loadState(); }); } catch { /* no window (tests) */ }
 

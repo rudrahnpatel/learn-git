@@ -22,6 +22,8 @@ import { renderShop } from './ui/shop.js';
 import { renderProfile } from './ui/profile.js';
 import { renderCards, cardRevealStep } from './ui/cards.js';
 import { REWARDS } from './brand.js';
+import { startCloud } from './cloud/sync.js';
+import { maybeSigninNudge } from './ui/account.js';
 
 const app = document.getElementById('app');
 let cleanup = null;
@@ -103,7 +105,7 @@ function celebrate({ title, xpEvent, res, popNode, sub, branch, color, newCards 
   const first = lessonCompleteStep({ title, xp: xpEvent.gained, accuracy: res.accuracy, timeMs: res.timeMs, perfect: res.perfect, sub, branch, color });
   const { steps } = followUpSteps({ xpEvent });
   const cards = newCards.length ? [cardRevealStep(newCards)] : [];
-  cleanup = runSequence(app, [first, ...cards, ...steps], () => goHome({ popNode }));
+  cleanup = runSequence(app, [first, ...cards, ...steps], () => { goHome({ popNode }); maybeSigninNudge(); });
 }
 
 function challengeRoute(levelId) {
@@ -157,5 +159,16 @@ async function boot() {
   game.takeAchievements();
   window.addEventListener('hashchange', route);
   route();
+  // Accounts (no-op with an empty js/cloud/config.js; supabase-js loads only for a signed-in browser).
+  startCloud({
+    onReplaced: () => {   // another device's progress was merged in
+      setMuted(game.G.mute);
+      applyAccent(game.accentTheme());
+      const calm = ['home', 'profile', 'shop', 'cards', 'practice', 'onboard'].includes(document.body.dataset.screen);
+      if (calm && !document.querySelector('.modal-wrap')) route();
+    },
+    onSignedIn: (p) => toast(`Signed in as ${p.name || p.email}. Your progress is synced.`, { icon: ICON.check(), ms: 3200 }),
+    onAuthError: (msg) => toast(msg, { icon: ICON.close(), ms: 3200 }),
+  });
 }
 boot();

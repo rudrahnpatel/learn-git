@@ -2,7 +2,7 @@
 // tags, challenges, unit review) and works out which are done, current, skipped or locked.
 import { UNITS as FIXTURE } from './fixture.js';
 import { G } from './game.js';
-import { levelById } from '../levels.js';
+import { buildNodes } from './path-nodes.js';
 
 export let UNITS = FIXTURE;
 export let contentSource = 'fixture';
@@ -31,33 +31,12 @@ let NODES = [];
 function index() {
   EX = new Map();
   for (const unit of UNITS) for (const lesson of unit.lessons) lesson.exercises.forEach((ex, i) => EX.set(exKey(lesson, ex, i), { ex, unit, lesson, key: exKey(lesson, ex, i) }));
-  NODES = buildNodes();
+  NODES = buildNodes(UNITS);
 }
 export const exerciseByKey = (k) => EX.get(k) || null;
 
 /* ------------------------------------------------------------ path nodes */
-function buildNodes() {
-  const out = [];
-  UNITS.forEach((unit, ui) => {
-    const challenges = (unit.challenges || []).filter((id) => levelById(id));
-    let ci = 0, chest = 0;
-    const lessons = unit.lessons;
-    lessons.forEach((lesson, li) => {
-      out.push({ id: `${unit.id}:lesson:${lesson.id}`, kind: 'lesson', unit, ui, lesson, title: lesson.title });
-      if ((li + 1) % 2 === 0) {
-        // Release tags keep the old `:chest:` ids so saved progress still matches.
-        out.push({ id: `${unit.id}:chest:${chest++}`, kind: 'release', unit, ui, title: 'Release' });
-        if (ci < challenges.length - 1) { const id = challenges[ci++]; out.push({ id: `${unit.id}:challenge:${id}`, kind: 'challenge', unit, ui, levelId: id, title: levelById(id).title }); }
-      }
-    });
-    while (ci < challenges.length) { const id = challenges[ci++]; out.push({ id: `${unit.id}:challenge:${id}`, kind: 'challenge', unit, ui, levelId: id, title: levelById(id).title }); }
-    if (lessons.some((l) => l.exercises.some((e) => e.type !== 'learn'))) out.push({ id: `${unit.id}:review`, kind: 'review', unit, ui, title: `${unit.title} review` });
-  });
-  // Number the release tags in path order: v0.1, v0.2, ... and the very last one ships v1.0.
-  const rel = out.filter((n) => n.kind === 'release');
-  rel.forEach((n, i) => { n.version = i === rel.length - 1 && rel.length > 1 ? 'v1.0' : `v0.${i + 1}`; n.title = `Release ${n.version}`; });
-  return out;
-}
+// buildNodes lives in path-nodes.js (no game state) so /admin can list the same nodes.
 export const nodes = () => NODES;
 export const nodeById = (id) => NODES.find((n) => n.id === id) || null;
 export const nodeForLevel = (levelId) => NODES.find((n) => n.kind === 'challenge' && n.levelId === levelId) || null;

@@ -66,6 +66,11 @@ export function loadState() {
     migrateV1(s);
     write(KEY, s);
   }
+  return repairState(s);
+}
+// Fills in every field a save is missing (merged over the defaults), never resetting what is there.
+// Pure (no storage access): the cloud sync runs a downloaded copy through it too (js/cloud/sync.js).
+export function repairState(s) {
   const base = freshState();
   const out = { ...base, ...s, streak: { ...base.streak, ...s.streak }, quests: { ...base.quests, ...s.quests }, stats: { ...base.stats, ...s.stats } };
   // Saves from before the course-aware layer get it filled in (a migration, never a reset).

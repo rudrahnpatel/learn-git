@@ -6,6 +6,7 @@ import { sfx } from '../sound.js';
 import { twig } from './twig.js';
 import { setShapes } from './fx.js';
 import * as game from './game.js';
+import { onboardingSignIn } from './account.js';
 
 export function renderOnboarding(root, { onDone }) {
   setShapes('onboard');
@@ -29,7 +30,8 @@ export function renderOnboarding(root, { onDone }) {
     if (step === 0) {
       t.say('Hi! I\'m <b>Twig</b>, a tiny branch with big plans.', 'happy');
       stage.replaceChildren(h('h1', { class: 'onb-title' }, 'Learn git in three-minute bites.'),
-        h('p', { class: 'onb-sub' }, 'Short lessons, a live repo to poke at, and a streak to keep alive. No real git needed, nothing to install.'));
+        h('p', { class: 'onb-sub' }, 'Short lessons, a live repo to poke at, and a streak to keep alive. No real git needed, nothing to install.'),
+        onboardingSignIn() || '');   // nothing unless accounts are configured
       next.replaceChildren('Let\'s go', h('span', { class: 'arr' }, ' →'));
       next.disabled = false;
     } else if (step === 1) {

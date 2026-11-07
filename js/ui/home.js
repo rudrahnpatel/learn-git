@@ -1,6 +1,6 @@
 // Home: the winding path of nodes, unit banners, Twig, and the side column (quests, streak
 // week, practice entry, achievements).
-import { h, confirmModal } from '../dom.js';
+import { h } from '../dom.js';
 import { APP, REWARDS } from '../brand.js';
 const CUR = REWARDS.currency, FRZ = REWARDS.freeze, cap = (t) => t[0].toUpperCase() + t.slice(1);
 import { sfx } from '../sound.js';
@@ -10,6 +10,7 @@ import { topbar } from './topbar.js';
 import { commitLine, releaseOverlay } from './complete.js';
 import { UNITS, nodes, nodeStatus, crowns, unitProgress, currentNode, contentSource } from './path.js';
 import * as game from './game.js';
+import { resetProgress, privacyLine } from './account.js';
 
 const KIND_ICON = { lesson: ICON.star, release: () => ICON.crate(false), challenge: ICON.terminal, review: ICON.trophy };
 const WAVE = [0, 0.55, 0.9, 0.55, 0, -0.55, -0.9, -0.55];
@@ -172,11 +173,10 @@ export function renderHome(root, { message = null, popNode = null, refresh } = {
   const boost = game.boostActive() ? h('div', { class: 'boost-banner', role: 'status' }, h('span', { class: 'ff-ic', html: ICON.ff() }), h('span', {}, 'Fast-forward · 2× XP · ', h('span', { class: 'mono' }, `${game.boostLeftMin()} min left`))) : null;
 
   const footer = h('footer', { class: 'foot' },
-    h('p', {}, 'Everything runs in your browser. No real git, nothing sent anywhere.'),
+    h('p', {}, privacyLine()),
     contentSource === 'fixture' ? h('p', { class: 'mono tiny' }, 'DEV FIXTURE CONTENT (js/content/index.js not found)') : null,
-    h('button', { class: 'btn ghost small', type: 'button', onclick: async () => {
-      if (await confirmModal('Reset everything?', `Your XP, ${REWARDS.streak.name}, ${CUR.many}, ${FRZ.many}, quests, cards, outfits and path progress will be wiped from this browser.`, { ok: 'Reset', danger: true })) { game.resetAll(); location.hash = '#/'; location.reload(); }
-    } }, 'Reset progress'));
+    // the confirm (and, when signed in, the cloud copy) is handled in account.js
+    h('button', { class: 'btn ghost small', type: 'button', onclick: () => resetProgress() }, 'Reset progress'));
 
   const side = h('aside', { class: 'side-col' }, boost, streakCard, questCard, practiceCard, achCard, footer);
   root.replaceChildren(topbar('learn'), h('div', { class: 'home' }, pathCol, side));

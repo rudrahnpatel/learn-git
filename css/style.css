@@ -1713,3 +1713,42 @@ body[data-screen="lesson"] .toast { top: auto; bottom: calc(var(--foot-h, 100px)
 }
 @media (max-width: 380px) { .card-grid { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { .ccard-shine::before { display: none; } }
+
+/* account (js/ui/account.js): profile card, sign-in button, nudge, onboarding link.
+   Only drawn when js/cloud/config.js is filled in. Tokens only, so light and dark both work. */
+.google-btn .g-ic { display: inline-grid; place-items: center; width: 28px; height: 28px; margin: -4px 4px -4px -8px; border-radius: 50%; background: #fff; flex: none; }
+.google-btn .g-ic svg { width: 18px; height: 18px; display: block; }
+.acct-card h2 { font-size: 30px; }
+.acct-copy { font-size: 17px; max-width: 620px; }
+.acct-actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-top: 16px; }
+.acct-who { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.acct-avatar { width: 64px; height: 64px; border-radius: 50%; flex: none; object-fit: cover; background: var(--frost); box-shadow: 0 3px 0 0 var(--shadow); }
+.acct-initial { display: inline-grid; place-items: center; font-size: 28px; background: var(--yellow); color: var(--on-accent); }
+.acct-id { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.acct-name { font-size: 22px; line-height: 1.15; overflow-wrap: anywhere; }
+.acct-email { font-size: 15px; overflow-wrap: anywhere; }
+.acct-status { display: inline-flex; align-items: center; gap: 8px; margin-top: 6px; font: 12px/17px var(--mono); letter-spacing: 0; text-transform: uppercase; color: var(--mute); }
+.acct-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--frost-2); flex: none; }
+.acct-status.s-synced .acct-dot { background: var(--green); }
+.acct-status.s-syncing .acct-dot, .acct-status.s-connecting .acct-dot { background: var(--iris); animation: acct-pulse 1s ease-in-out infinite alternate; }
+.acct-status.s-offline .acct-dot { background: var(--lane-3); }
+.acct-status.s-error .acct-dot { background: var(--red); }
+@keyframes acct-pulse { to { opacity: .35; } }
+.acct-note { margin-top: 14px; }
+.acct-err { color: var(--err); margin-top: 10px; }
+.acct-delete { color: var(--err); }
+.nudge { display: flex; flex-direction: column; gap: 10px; }
+.nudge .twig-wrap { align-self: flex-start; }
+.nudge-copy { font-size: 19px; }
+.confirm .reset-note { margin-top: 12px; font-size: 15px; }
+.linkish { background: none; border: 0; padding: 0; font: inherit; color: var(--iris-text); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; letter-spacing: inherit; }
+.linkish:disabled { color: var(--mute); cursor: default; }
+.onb-signin { margin-top: clamp(8px, 1.6vh, 16px); text-align: center; }
+@media (max-width: 760px) {
+  .acct-card { padding: 18px; }
+  .acct-card h2 { font-size: 26px; }
+  .acct-avatar { width: 52px; height: 52px; }
+  .acct-actions .btn { flex: 1 1 auto; }
+  .nudge .modal-actions .btn { flex: 1 1 auto; }
+}
+@media (prefers-reduced-motion: reduce) { .acct-status .acct-dot { animation: none !important; } }
