@@ -11,6 +11,8 @@ import { sfx } from '../sound.js';
 import { shake, reducedMotion } from './fx.js';
 import { keepFocus } from './kb.js';
 import { resolve } from './resolve.js';
+import { FileTree } from './filetree.js';
+import { freshShell, gradeShellType, outcomeOptions, VARIANT_NOTE } from '../shellex.js';
 
 const richRe = /<\/?(code|b|i|em|strong|br|kbd)\b/i;
 const rich = (s) => (richRe.test(String(s)) ? { html: String(s) } : {});
@@ -59,7 +61,8 @@ export function miniGraph(data, { size = 'mid', cls = '' } = {}) {
 }
 
 /* ================================================================ learn */
-function learn(ex) {
+function learn(ex, ctx = {}) {
+  if (ctx.engine === 'shell') return learnShell(ex);
   const parts = [h('div', { class: 'learn-card card' },
     h('span', { class: 'tag-pill mono' }, 'NEW IDEA'),
     richEl('h2', { class: 'learn-title' }, ex.title || ''),
@@ -478,7 +481,177 @@ function type(ex, ctx) {
   };
 }
 
-const RENDERERS = { learn, choice, fill, build, order, match, graph, type, resolve: (ex, ctx) => resolve(ex, ctx, { richPrompt: prompt }) };
+/* ======================================================= the bash course (engine: 'shell') */
+// The same exercises on a js/shell.js Shell: the file tree takes the commit graph's place. See
+// .notes/bash-course-terminal-basics.md.
+// The symbol row above the phone keyboard (the owner's list): [text, spoken name].
+export const SHELL_SYMBOLS = [['|', 'pipe'], ['>', 'greater than'], ['<', 'less than'], ['*', 'star'], ['~', 'tilde'], ['/', 'slash'], ['$', 'dollar'], ['"', 'double quote'], ["'", 'single quote'], ['-', 'dash']];
+// A command's output as terminal lines (stdout plain, stderr red, sandbox notes quiet).
+const outLines = (lines) => lines.map((l) => h('div', { class: 'ln ' + (l.c || '') }, l.t || ' '));
+
+function learnShell(ex) {
+  const card = h('div', { class: 'learn-card card' },
+    h('span', { class: 'tag-pill mono' }, 'NEW IDEA'),
+    richEl('h2', { class: 'learn-title' }, ex.title || ''),
+    h('div', { class: 'learn-body', html: ex.body || '' }));
+  let timers = [];
+  const parts = [card];
+  if (ex.demo && ex.demo.setup) {
+    const cap = h('span', { class: 'demo-cap mono' }, 'BEFORE');
+    const cmdEl = h('code', { class: 'demo-cmd' }, ' ');
+    const replay = h('button', { class: 'btn ghost small replay', type: 'button', 'aria-label': 'Replay the demo', onclick: () => play() }, '↻', h('span', { class: 'replay-t' }, ' Replay'));
+    const stage = h('div', { class: 'demo-stage demo-files' });
+    const out = h('div', { class: 'demo-out mono', role: 'log', 'aria-label': 'Demo output' });
+    parts.push(h('div', { class: 'demo card' }, h('div', { class: 'demo-head' }, cap, cmdEl, replay), stage, out));
+    const tree = new FileTree(stage, { label: 'Files in the demo', compact: true });
+    const runs = ex.demo.run || [];
+    const play = () => {
+      timers.forEach(clearTimeout); timers = [];
+      let sh;
+      try { sh = freshShell(ex.demo.setup); } catch (e) { stage.textContent = 'demo failed: ' + e.message; return; }
+      tree.seen = null;
+      tree.render(sh);
+      out.replaceChildren();
+      cap.textContent = 'BEFORE'; cap.className = 'demo-cap mono';
+      cmdEl.textContent = runs.length ? '$ ' : '';
+      let t = 700;
+      runs.forEach((cmd, i) => {
+        const full = '$ ' + cmd;
+        const speed = reducedMotion() ? 0 : 28;
+        for (let k = 3; k <= full.length; k++) timers.push(setTimeout(() => { cmdEl.textContent = full.slice(0, k); }, t + (k - 3) * speed));
+        t += full.length * speed + 250;
+        timers.push(setTimeout(() => {
+          const before = sh.prompt();
+          const r = sh.run(cmd);
+          out.append(h('div', { class: 'ln cmd' }, h('span', { class: 'p' }, before + ' '), cmd), ...outLines(r.lines));
+          out.scrollTop = out.scrollHeight;
+          tree.render(sh, { animate: true });
+          if (i === runs.length - 1) { cap.textContent = 'AFTER'; cap.className = 'demo-cap mono after'; }
+          sfx.pop();
+        }, t));
+        t += 900;
+      });
+    };
+    setTimeout(play, 50);
+  }
+  return {
+    el: h('div', { class: 'ex ex-learn' }, ...parts),
+    learn: true, ready: () => true, grade: () => ({ ok: true }), key: () => false, lock() {},
+    destroy() { timers.forEach(clearTimeout); },
+  };
+}
+
+function typeShell(ex, ctx) {
+  const MAX = ex.max || 4;   // one look around (ls, cat) on top of the solution's up to three commands
+  let sh, lines = [], locked = false;
+  // it scrolls on its own in a long tree, so it takes the focus too (arrow keys scroll it)
+  const treeBox = h('div', { class: 'type-files-tree', tabindex: '0', role: 'region', 'aria-label': 'File tree' });
+  const termBox = h('div', { class: 'type-term' });
+  const counter = h('span', { class: 'cmd-count mono', id: 'type-count' });
+  const tree = new FileTree(treeBox, { label: 'Files in your home folder' });
+  const term = new Terminal(termBox, {
+    onCommand: (c) => run(c), getCompletions: () => sh.completions(), history: [], onHistory: () => {},
+    label: 'Shell command', placeholder: phone() ? 'command…' : 'type a command, e.g. ls',
+    complete: (l) => sh.complete(l), symbols: SHELL_SYMBOLS, plain: true,
+  });
+  term.input.setAttribute('aria-describedby', `ex-prompt type-count ${term.input.getAttribute('aria-describedby') || ''}`.trim());
+  term.input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !term.input.value.trim()) { e.preventDefault(); e.stopPropagation(); ctx.submit(); }
+  });
+  const refresh = (animate) => {
+    const d = tree.render(sh, { animate });
+    term.setPrompt(sh.prompt());
+    counter.textContent = `${lines.length}/${MAX} commands`;
+    if (animate && (d.added.length || d.removed.length)) announce([d.added.length ? `Added ${d.added.join(', ')}.` : '', d.removed.length ? `Removed ${d.removed.join(', ')}.` : ''].join(' ').trim());
+  };
+  const reset = () => {
+    try { sh = freshShell(ex.setup); } catch (e) { termBox.textContent = 'setup failed: ' + e.message; return; }
+    lines = []; term.clear(); term.input.disabled = false;
+    tree.seen = null;
+    refresh(false);
+    ctx.onChange();
+  };
+  const run = (c) => {
+    if (locked || lines.length >= MAX) return;
+    const res = sh.run(c);
+    lines.push(c);
+    for (const ev of res.events) {
+      if (ev.type === 'clear') term.clear();
+      if (ev.type === 'edit') term.note('(The editor is not part of these lessons. Make files with touch, echo and > instead.)');
+    }
+    term.print(res.lines);
+    refresh(true);
+    sfx.tap();
+    if (lines.length >= MAX) {
+      const had = document.activeElement === term.input;
+      term.input.disabled = true; term.note(`That's ${MAX} commands. Press Check.`);
+      if (had) setTimeout(() => document.querySelector('.lesson-foot .check')?.focus({ preventScroll: true }), 0);
+    }
+    ctx.onChange();
+  };
+  reset();
+  return {
+    el: h('div', { class: 'ex ex-type ex-shell' }, prompt(ex),
+      h('div', { class: 'type-grid' },
+        h('div', { class: 'type-left card' }, treeBox),
+        h('div', { class: 'type-right' }, termBox,
+          h('div', { class: 'type-meta' }, counter, h('button', { class: 'btn ghost small', type: 'button', onclick: () => { if (!locked) { reset(); term.focus(); announce('Files reset to the start.'); } } }, h('span', { 'aria-hidden': 'true' }, '↻ '), 'Reset files'))))),
+    ready: () => lines.length > 0,
+    grade: () => {
+      const g = gradeShellType(ex, sh, lines);
+      return { ok: g.ok, answer: ex.solution, mono: true, typed: true, note: g.live && g.variant === false ? VARIANT_NOTE : null };
+    },
+    key: () => false,
+    lock: () => { locked = true; term.input.disabled = true; },
+    focus: () => { if (!matchMedia('(pointer: fine)').matches) return false; term.focus(); return true; },
+  };
+}
+
+// outcome: the starting files and a command; pick the resulting tree (or output) from options the engine produced.
+function outcome(ex, ctx) {
+  let built;
+  try { built = outcomeOptions(ex); } catch (e) {
+    return { el: h('div', { class: 'ex' }, prompt(ex), h('p', {}, 'This exercise failed to build: ' + e.message)), ready: () => true, grade: () => ({ ok: true }), key: () => false, lock() {} };
+  }
+  const opts = shuffle(built.opts.slice());
+  const right = opts.findIndex((o) => o.ok);
+  const isTree = ex.show !== 'output';
+  const ol = optionList(opts.map(() => ''), () => ctx.onChange(), { cls: 'graph-opt outcome-opt' });
+  ol.btns.forEach((b, i) => {
+    const body = h('span', { class: 'oc-body' });
+    if (isTree) new FileTree(body, { compact: true, inline: true, hidden: !!ex.hidden }).render(opts[i].sh);
+    else body.append(h('span', { class: 'oc-out mono' }, opts[i].value || '(nothing)'));
+    b.querySelector('.opt-t').replaceWith(sr(`Option ${i + 1}: `), body);
+    b.__ok = opts[i].ok;   // as the graph options do (browser checks read it)
+  });
+  ol.list.classList.add('graph-opts', 'outcome-opts', 'n' + opts.length, isTree ? 'trees' : 'outputs');
+  const startBox = h('div', { class: 'oc-start-tree' });
+  new FileTree(startBox, { label: 'Starting files', compact: true, hidden: !!ex.hidden }).render(built.start);
+  return {
+    el: h('div', { class: 'ex ex-graph ex-outcome' }, prompt(ex),
+      h('div', { class: 'graph-start oc-start card' },
+        h('div', { class: 'gs-col' }, h('span', { class: 'tag-pill mono' }, 'START'), startBox),
+        h('div', { class: 'gs-arrow' }, sr('then run '), h('code', { class: 'cmd-pill' }, ex.command), h('span', { class: 'gs-arr', 'aria-hidden': 'true' }, '→'), h('span', { class: 'gs-q', 'aria-hidden': 'true' }, '?'))),
+      h('p', { class: 'ex-sub' }, isTree ? 'Pick the files you end up with.' : 'Pick what it prints.'),
+      ol.list),
+    ready: () => ol.sel >= 0,
+    grade: () => {
+      const ok = ol.sel === right;
+      ol.btns[right]?.classList.add('right');
+      mark(ol.btns[right], ok ? 'your answer, correct' : 'correct answer');
+      if (!ok) { ol.btns[ol.sel]?.classList.add('wrong'); mark(ol.btns[ol.sel], 'your answer, not right'); }
+      return { ok, answer: `option ${right + 1}` };
+    },
+    key: (e) => { const d = digit(e); if (d >= 0 && d < opts.length) { ol.pick(d); return true; } return false; },
+    lock: () => ol.list.classList.add('locked'),
+  };
+}
+
+const RENDERERS = {
+  learn, choice, fill, build, order, match, graph, outcome,
+  type: (ex, ctx) => (ctx.engine === 'shell' ? typeShell(ex, ctx) : type(ex, ctx)),
+  resolve: (ex, ctx) => resolve(ex, ctx, { richPrompt: prompt }),
+};
 export const TYPES = Object.keys(RENDERERS);
 export function renderExercise(ex, ctx) {
   const f = RENDERERS[ex.type];

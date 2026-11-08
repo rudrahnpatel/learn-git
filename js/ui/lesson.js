@@ -13,7 +13,8 @@ const COMBO_AT = { 5: 2, 10: 3, 15: 5 };
 
 // items: [{ ex, key }]. mode: 'lesson' | 'review' | 'mistakes'. onFinish(result) is called once.
 // onAnswer({ ex, type, ok, attempt, skipped }) after each answer (analytics); onQuit({ reached, total, accuracy, ms, ex }).
-export function playSession(root, { title, items, mode = 'lesson', onFinish, onQuit, onAnswer }) {
+// engine: the course's live engine ('git' | 'shell', js/courses.js): type/outcome/learn demos build a Repo or a Shell.
+export function playSession(root, { title, items, mode = 'lesson', engine = 'git', onFinish, onQuit, onAnswer }) {
   setShapes('lesson');
   document.title = `${title} · ${APP.name}`;
   const queue = items.map((it) => ({ ...it, retry: false }));
@@ -100,7 +101,7 @@ export function playSession(root, { title, items, mode = 'lesson', onFinish, onQ
       ex.new && !item.retry && ex.type !== 'learn' ? h('span', { class: 'tag-pill mono new' }, '★ NEW') : null,
       mode === 'mistakes' && !item.retry ? h('span', { class: 'tag-pill mono' }, 'REVIEW') : null,
     ].filter(Boolean));
-    cur = renderExercise(ex, { onChange: () => sync(), submit: () => { if (!checked && cur.ready()) check(); } });
+    cur = renderExercise(ex, { engine, onChange: () => sync(), submit: () => { if (!checked && cur.ready()) check(); } });
     stage.replaceChildren(cur.el);
     stage.classList.remove('enter'); void stage.offsetWidth; stage.classList.add('enter');
     body.scrollTop = 0;
