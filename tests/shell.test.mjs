@@ -63,6 +63,11 @@ test('parser: syntax errors carry a message and exit 2', () => {
   assert.match(err(sh, 'for x in a; do echo', 2), /unexpected end of file/);
   assert.match(err(sh, '| ls', 2), /unexpected token `\|'/);
   assert.match(err(sh, 'case a in a) ;; esac', 2), /not supported/);
+  assert.match(err(sh, '(( i++ ))', 2), /not supported in this sandbox/);
+  assert.equal(out(sh, '( (echo nested) )'), 'nested\n', 'nested subshells need the space, as in bash');
+  const r = sh.run('[[ -f a.txt ]]');
+  assert.equal(r.code, 127);
+  assert.ok(r.lines.some((l) => l.c === 'hint' && /use \[ \]/.test(l.t)));
 });
 
 /* ================================================================== paths and navigation */

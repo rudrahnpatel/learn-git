@@ -171,6 +171,7 @@ export function lex(src, { oneWord = false } = {}) {
         continue;
       }
       const two = src.slice(i, i + 2);
+      if (two === '((') throw new SyntaxErr('(( )) is not supported in this sandbox; use $(( )) as in: i=$((i + 1))', line);
       if (two === '&&' || two === '||' || two === ';;') { toks.push({ t: 'op', v: two, line }); i += 2; continue; }
       if (c === '|' || c === '&' || c === ';' || c === '(' || c === ')') { toks.push({ t: 'op', v: c, line }); i++; continue; }
     }

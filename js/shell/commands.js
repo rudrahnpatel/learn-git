@@ -20,7 +20,8 @@ export const NOT_HERE = {
   python: 'Only bash runs in this sandbox.', python3: 'Only bash runs in this sandbox.', node: 'Only bash runs in this sandbox.',
   ln: 'Links are not simulated in this sandbox yet.', tar: 'Archives are not simulated in this sandbox.', zip: 'Archives are not simulated in this sandbox.',
   yes: 'yes prints forever; it is not simulated here.', git: 'This is the bash sandbox: git lives in the git course.',
-  emacs: 'Try nano: it opens the sandbox editor.', code: 'Try nano: it opens the sandbox editor.',
+  emacs: 'Try nano: it opens the sandbox editor.',
+  '[[': '[[ ]] is not supported in this sandbox; use [ ] (test) instead, with quotes around variables.', code: 'Try nano: it opens the sandbox editor.',
 };
 // names in /usr/bin that are builtins too (so `which echo` finds /usr/bin/echo, as on a real system)
 export const BIN_DIR_EXTRA = ['echo', 'printf', 'test', '[', 'true', 'false', 'pwd', 'kill'];
