@@ -129,7 +129,8 @@ export function openRebaseTodo(repo, { onStart, onCancel }) {
     }));
     if (focusId) {
       const row = list.querySelector(`[data-id="${CSS.escape(focusId)}"]`);
-      const t = row?.querySelector(`[data-f="${focusWhat}"]:not(:disabled)`) || row?.querySelector('[data-f]:not(:disabled)');
+      // a row moved to the end has no "down" any more: the other move button, then its select
+      const t = row?.querySelector(`[data-f="${focusWhat}"]:not(:disabled)`) || row?.querySelector('[data-f="up"]:not(:disabled), [data-f="down"]:not(:disabled)') || row?.querySelector('[data-f]');
       t?.focus();
     }
   };
