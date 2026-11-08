@@ -15,6 +15,7 @@ import { loadState, saveState, resetState, freshCourse, deviceId, STATE_KEY } fr
 import { record, writeMirrors, balance, stashKey } from '../wallet.js';
 import { ITEMS, itemById } from './cosmetics.js';
 import { CARDS } from '../content/cards.js';
+import { track } from '../analytics/track.js';
 
 export let G = loadState();
 // Cloud sync (js/cloud/) sets a hook while someone is signed in: it stamps the save and queues a push.
@@ -136,6 +137,7 @@ function extendStreak() {
   s.lastDay = t;
   s.best = Math.max(s.best, s.count);
   const milestone = STREAK_MILESTONES.includes(s.count) ? s.count : null;
+  if (milestone) track('milestone', { kind: 'streak', value: milestone });
   checkAchievements();
   return { count: s.count, milestone };
 }
@@ -312,7 +314,7 @@ export const ACHIEVEMENTS = [
 let achievementEvents = [];
 export function checkAchievements() {
   for (const a of ACHIEVEMENTS) {
-    if (!G.achievements[a.id] && a.test(G)) { G.achievements[a.id] = Date.now(); achievementEvents.push(a); }
+    if (!G.achievements[a.id] && a.test(G)) { G.achievements[a.id] = Date.now(); achievementEvents.push(a); track('milestone', { kind: 'achievement', id: a.id }); }
   }
 }
 export function takeAchievements() { const e = achievementEvents; achievementEvents = []; return e; }

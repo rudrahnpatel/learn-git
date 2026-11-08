@@ -77,6 +77,57 @@
     .acct-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: space-between; }
     .acct-row p { flex: 1 1 240px; color: var(--mute); font-size: 15px; }
     .danger-t, .drawer .del { color: var(--err); }
+    /* tabs: Users | Analytics */
+    .admin-tabs { display: flex; gap: 4px; padding: 4px; border-radius: 48px; background: var(--paper); border: 1px solid var(--frost); }
+    .admin-tab { padding: 8px 18px; border-radius: 48px; color: var(--ink); text-decoration: none; font-size: 16px; }
+    .admin-tab.on { background: var(--iris); color: var(--on-iris); }
+    .admin-tab:focus-visible { outline: 2px solid var(--iris); outline-offset: 2px; }
+
+    /* analytics (admin/analytics.js) */
+    .an, .an-body { display: flex; flex-direction: column; gap: 16px; }
+    .an-range { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; }
+    .an-presets { display: flex; gap: 6px; flex-wrap: wrap; }
+    .an-date { display: flex; flex-direction: column; gap: 4px; }
+    .an-date input { font: 400 15px/1.2 var(--mono); letter-spacing: 0; padding: 8px 12px; border-radius: 14px; border: 1px solid var(--frost-2); background: var(--paper); color: var(--ink); color-scheme: light dark; }
+    .an-utc { align-self: center; }
+    .an-card { padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+    .an-card h3 { font-size: 22px; }
+    .an-card .hint { color: var(--mute); font-size: 14px; }
+    .an-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+    .an-stat { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 16px; background: var(--chalk); }
+    .an-stat b { font-size: 28px; font-weight: 400; letter-spacing: 0; }
+    .an-stat small { color: var(--mute); font-size: 13px; }
+    .an-devices { display: flex; gap: 6px; flex-wrap: wrap; }
+    .an-chart-wrap { overflow-x: auto; }
+    .an-chart { width: 100%; min-width: 560px; height: auto; display: block; }
+    .an-chart .an-grid { stroke: var(--frost); stroke-width: 1; }
+    .an-chart .an-axis { fill: var(--mute); font: 11px var(--mono); }
+    .an-chart .an-bar { fill: var(--iris); opacity: .85; }
+    .an-chart .an-line { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+    .an-legend { display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; }
+    .an-key { display: inline-block; width: 14px; height: 10px; border-radius: 3px; }
+    .an-key.bar { background: var(--iris); }
+    .an-key.line { height: 2px; background: var(--ink); }
+    .an-details summary { cursor: pointer; color: var(--iris-text); font-size: 14px; }
+    .an-details[open] summary { margin-bottom: 8px; }
+    .an-funnel { display: flex; flex-direction: column; gap: 8px; }
+    .an-frow { display: grid; grid-template-columns: minmax(150px, 230px) 1fr 56px 130px; gap: 10px; align-items: center; font-size: 15px; }
+    .an-ftrack { height: 14px; border-radius: 8px; background: var(--frost); overflow: hidden; }
+    .an-ffill { display: block; height: 100%; background: var(--iris); border-radius: 8px; }
+    .an-fnum { text-align: right; letter-spacing: 0; }
+    .an-table table.users { min-width: 640px; }
+    .an-name { display: flex; flex-direction: column; min-width: 180px; }
+    .an-name small { color: var(--mute); font: 11px/15px var(--mono); letter-spacing: 0; overflow-wrap: anywhere; }
+    .an-cmp { display: inline-flex; align-items: center; gap: 8px; }
+    .an-meter { display: inline-block; width: 70px; height: 8px; border-radius: 4px; background: var(--frost); overflow: hidden; }
+    .an-meter span { display: block; height: 100%; background: var(--iris); }
+    .an-min { width: 110px; }
+    .an-minrow { align-self: flex-start; }
+    @media (max-width: 760px) {
+      .an-frow { grid-template-columns: 1fr 48px; }
+      .an-frow .an-ftrack { grid-column: 1 / -1; grid-row: 2; }
+      .an-frow .an-fpct { grid-column: 1 / -1; }
+    }
     @media (max-width: 760px) {
       .admin { padding: 20px 16px 64px; gap: 16px; }
       .admin-top h1 { font-size: 34px; }

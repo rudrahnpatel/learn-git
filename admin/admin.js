@@ -1,5 +1,6 @@
 // /admin: the user list with a progress summary, an edit drawer per user (progress numbers, lesson
-// progress, course reset, admin rights, ban) and delete. Every check that matters runs in Postgres
+// progress, course reset, admin rights, ban) and delete, plus the Analytics view (#analytics,
+// admin/analytics.js). Every check that matters runs in Postgres
 // (the admin_* functions in supabase/schema.sql check the signed-in JWT's email against the admins
 // table), so this page holds no secrets: anyone can load it, and anyone who isn't an admin just sees
 // "Not authorised". Online-only, not in the service-worker cache.
@@ -12,6 +13,7 @@ import { applyTheme } from '../js/theme.js';
 import { toast } from '../js/ui/fx.js';
 import { walletOf, balance } from '../js/wallet.js';
 import { cloudConfigured, getClient, signInWithGoogle, cleanAuthParams, profileOf } from '../js/cloud/client.js';
+import { renderAnalytics } from './analytics.js';
 
 const root = document.getElementById('admin');
 // The game: /app on Vercel (vercel.json routes it); file servers (the local playground) only have /index.html.
@@ -19,8 +21,15 @@ const APP_HREF = location.hostname.endsWith('vercel.app') ? '/app' : '/index.htm
 applyTheme();
 try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme()); } catch { /* old browsers */ }
 
+let tabbed = false;   // Users | Analytics tabs, once signed in as an admin
+const tabs = () => {
+  const cur = location.hash === '#analytics' ? 'analytics' : 'users';
+  const tab = (id, label) => h('a', { class: 'admin-tab' + (cur === id ? ' on' : ''), href: id === 'users' ? '#users' : '#analytics', 'aria-current': cur === id ? 'page' : null }, label);
+  return h('nav', { class: 'admin-tabs', 'aria-label': 'Admin sections' }, tab('users', 'Users'), tab('analytics', 'Analytics'));
+};
 const top = (...tools) => h('header', { class: 'admin-top' },
   h('div', {}, h('a', { class: 'brand', href: APP_HREF }, '← learn-git'), h('h1', {}, 'Admin')),
+  tabbed ? tabs() : null,
   tools.length ? h('div', { class: 'admin-tools' }, ...tools) : null);
 const message = (title, text, ...actions) => root.replaceChildren(top(), h('section', { class: 'card admin-msg' }, h('h2', {}, title), text ? h('p', {}, text) : null, ...actions));
 
@@ -56,12 +65,22 @@ async function main() {
   const { data: admin, error: aerr } = await sb.rpc('is_admin');
   if (aerr) return message('Something went wrong', `is_admin() failed: ${aerr.message}. Has supabase/schema.sql been run?`, signOut);
   if (!admin) return message('Not authorised', `${me.email} is not an admin. Admins are listed in the admins table (see supabase/README.md).`, signOut);
-  await listUsers(sb, me, signOut);
+  tabbed = true;
+  const show = () => (location.hash === '#analytics' ? showAnalytics(sb, signOut) : listUsers(sb, me, signOut));
+  addEventListener('hashchange', () => { document.querySelector('.drawer-wrap')?.remove(); show(); });
+  await show();
+}
+
+async function showAnalytics(sb, signOut) {
+  const box = h('div', { class: 'an' });
+  root.replaceChildren(top(signOut), box);
+  await renderAnalytics(box, { sb, loadPath });
 }
 
 async function listUsers(sb, me, signOut) {
   root.replaceChildren(top(signOut), h('p', { class: 'muted' }, 'Loading users…'));
   const { data, error } = await sb.rpc('admin_list_users');
+  if (tabbed && location.hash === '#analytics') return;   // switched to Analytics while it loaded
   if (error) return message('Could not load users', error.message, signOut);
   let rows = data || [];
   const search = h('input', { class: 'admin-search', type: 'search', placeholder: 'Search name or email', 'aria-label': 'Search users' });

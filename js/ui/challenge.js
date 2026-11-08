@@ -16,6 +16,7 @@ import { twig } from './twig.js';
 import { runSequence, followUpSteps } from './complete.js';
 import * as game from './game.js';
 import { watchKeyboard, keepFocus } from './kb.js';
+import { track } from '../analytics/track.js';
 
 const finePointer = () => typeof matchMedia === 'function' && matchMedia('(pointer: fine)').matches;
 const narrow = () => typeof matchMedia === 'function' && matchMedia('(max-width: 760px)').matches;
@@ -281,6 +282,7 @@ export function renderChallenge(root, level, opts = {}) {
     } else {
       stars = starsFor(level, moves, hintsShown);
       game.completeChallenge(level.id, stars);
+      track('challenge_done', { level: level.id, stars, moves, hints: hintsShown });
       line = `${moves} moves, par ${parOf(level)}${hintsShown >= level.hints.length ? ' · all hints used (max 2 stars)' : ''}`;
     }
     const xp = level.arcade ? 5 + stars * 3 : game.XP.challenge[stars];

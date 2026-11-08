@@ -7,6 +7,7 @@ import { twig } from './twig.js';
 import { setShapes } from './fx.js';
 import * as game from './game.js';
 import { onboardingSignIn } from './account.js';
+import { track } from '../analytics/track.js';
 
 export function renderOnboarding(root, { onDone }) {
   setShapes('onboard');
@@ -62,11 +63,12 @@ export function renderOnboarding(root, { onDone }) {
   }
   function advance() {
     sfx.tap();
-    if (step < 2) { step++; draw(true); return; }
+    if (step < 2) { step++; track('onboarding_step', { step }); draw(true); return; }
     game.G.placement = placement;
     game.G.goal = game.GOALS[goal].xp;
     game.G.onboarded = true;
     game.save();
+    track('onboarding_done', { placement, goal: game.G.goal });
     onDone();
   }
   const onKey = (e) => {
@@ -75,6 +77,7 @@ export function renderOnboarding(root, { onDone }) {
     if (/^[1-4]$/.test(e.key) && step > 0) { const i = Number(e.key) - 1; if (step === 1) placement = i; else goal = i; sfx.tap(); draw(); }
   };
   document.addEventListener('keydown', onKey);
+  track('onboarding_step', { step: 0 });
   draw();
   return () => document.removeEventListener('keydown', onKey);
 }
