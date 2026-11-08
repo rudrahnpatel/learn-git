@@ -101,7 +101,7 @@ Locally: `python3 -m http.server 8801` from the repo root, then open http://loca
 The app and the landing page send a small set of learning events (lesson started / finished / quit,
 first-try answers, onboarding steps, the funnel) to an `events` table in this same project, and
 `/admin` → **Analytics** shows them. The event list and payload shapes live in
-`js/analytics/events.js`; the table, policy and dashboard functions in
+`js/learnlog/kinds.js`; the table, policy and dashboard functions in
 [`migrations/analytics.sql`](migrations/analytics.sql) (also the `-- ==== analytics ====` section at
 the end of `schema.sql`).
 

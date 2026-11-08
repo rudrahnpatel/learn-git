@@ -16,7 +16,7 @@ import { twig } from './twig.js';
 import { runSequence, followUpSteps } from './complete.js';
 import * as game from './game.js';
 import { watchKeyboard, keepFocus } from './kb.js';
-import { track } from '../analytics/track.js';
+import { track } from '../learnlog.js';
 
 const finePointer = () => typeof matchMedia === 'function' && matchMedia('(pointer: fine)').matches;
 const narrow = () => typeof matchMedia === 'function' && matchMedia('(max-width: 760px)').matches;

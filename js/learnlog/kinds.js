@@ -1,5 +1,5 @@
 // The analytics event list: every event name and the shape of its props, in one place. The client
-// (js/analytics/track.js) drops anything that doesn't fit, and supabase/migrations/analytics.sql
+// (js/learnlog/send.js) drops anything that doesn't fit, and supabase/migrations/analytics.sql
 // accepts only these names (tests/analytics.test.mjs checks the two lists match). Pure: no DOM.
 // Privacy rules (.notes/analytics-supabase.md): no user ids, emails, IPs, user agents or free text.
 // Props are short ids, small numbers and booleans only.

@@ -25,7 +25,7 @@ import { renderCards, cardRevealStep } from './ui/cards.js';
 import { REWARDS } from './brand.js';
 import { startCloud } from './cloud/sync.js';
 import { maybeSigninNudge } from './ui/account.js';
-import { track } from './analytics/track.js';
+import { track } from './learnlog.js';
 
 const app = document.getElementById('app');
 let cleanup = null;

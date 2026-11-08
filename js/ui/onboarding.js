@@ -7,7 +7,7 @@ import { twig } from './twig.js';
 import { setShapes } from './fx.js';
 import * as game from './game.js';
 import { onboardingSignIn } from './account.js';
-import { track } from '../analytics/track.js';
+import { track } from '../learnlog.js';
 
 export function renderOnboarding(root, { onDone }) {
   setShapes('onboard');

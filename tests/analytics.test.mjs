@@ -3,11 +3,11 @@
 // declares. Run: node --test tests/ (or node tests/analytics.test.mjs)
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { EVENTS, EVENT_NAMES, cleanProps, privacySignal, deviceClass, hostAllowed } from '../js/analytics/events.js';
-import { createQueue, takeBatch, capRows, classify, QUEUE_CAP } from '../js/analytics/queue.js';
+import { EVENTS, EVENT_NAMES, cleanProps, privacySignal, deviceClass, hostAllowed } from '../js/learnlog/kinds.js';
+import { createQueue, takeBatch, capRows, classify, QUEUE_CAP } from '../js/learnlog/outbox.js';
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -168,7 +168,7 @@ test('queue: survives a reload, and corrupt or blocked storage never throws', as
 
 /* ------------------------------------------------------ track() in node */
 test('track() is a silent no-op without a browser', async () => {
-  const { track, analyticsOn } = await import('../js/analytics/track.js');
+  const { track, analyticsOn } = await import('../js/learnlog/send.js');
   assert.equal(analyticsOn(), false);
   assert.doesNotThrow(() => track('lesson_done', { node: 'a:lesson:b' }));
   assert.doesNotThrow(() => track('nonsense'));
@@ -189,4 +189,25 @@ test('schema.sql carries the analytics migration verbatim', () => {
   const m = schema.match(/-- ==== analytics ====\n-- [^\n]*\n([\s\S]*?)-- ==== \/analytics ====/);
   assert.ok(m, 'analytics section in schema.sql');
   assert.equal(m[1], mig);
+});
+
+/* ---------------------------------------------------- blocker safety */
+// Content blockers (uBlock Origin) block stats scripts. A blocked *static* import fails the whole module graph and
+// the app renders nothing, so app code may only reach the stats code through js/learnlog.js (a dynamic import).
+test('no shipped module statically imports the stats code', () => {
+  const walk = (d) => readdirSync(join(repo, d), { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? walk(join(d, e.name)) : e.name.endsWith('.js') ? [join(d, e.name)] : []);
+  const files = [...walk('js'), ...walk('site'), ...walk('admin')].filter((f) => !f.startsWith(join('js', 'learnlog')));
+  const bad = files.filter((f) => /^\s*import[^(]*from\s*['"][^'"]*learnlog\//m.test(readFileSync(join(repo, f), 'utf8')));
+  assert.deepEqual(bad, []);
+  // and nothing shipped sits under a path blockers match on
+  assert.deepEqual(files.filter((f) => /(^|\/)(analytics|tracking|telemetry)(\/|\.js$)|(^|\/)track\.js$/.test(f)), []);
+});
+
+test('the shim queues calls and never throws', async () => {
+  const shim = await import('../js/learnlog.js');
+  assert.equal(shim.analyticsOn(), false);
+  assert.doesNotThrow(() => shim.track('lesson_done', { node: 'a:lesson:b' }));
+  await shim.loadStats();
+  assert.equal(shim.analyticsOn(), false);   // node: no browser, so stats stay off
 });

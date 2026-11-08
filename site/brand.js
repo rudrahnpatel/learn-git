@@ -17,6 +17,6 @@ app.forEach((a) => { a.href = url; });
 let leaving = false;
 try { if (matchMedia('(display-mode: standalone)').matches) { leaving = true; location.replace(url); } } catch { /* ignore */ }
 
-// First-party, cookie-free analytics (js/analytics/track.js; off with Do Not Track / GPC): one landing_view.
-if (!leaving) import('../js/analytics/track.js').then((m) => m.track('landing_view')).catch(() => {});
+// First-party, cookie-free analytics (js/learnlog.js; off with Do Not Track / GPC): one landing_view.
+if (!leaving) import('../js/learnlog.js').then((m) => m.track('landing_view')).catch(() => {});
 // The reel's play/pause lives in page.js (it plays only while on screen).

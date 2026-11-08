@@ -11,11 +11,11 @@
 //
 // What a row holds: a random install id (localStorage, made here, never linked to a Google account),
 // a per-visit session id (sessionStorage, 30 min idle), the event name, a coarse device class
-// (phone / tablet / desktop), the client time and the props declared in events.js. No IP is stored
+// (phone / tablet / desktop), the client time and the props declared in kinds.js. No IP is stored
 // (Supabase's REST API doesn't put it in the row), no user agent, no user id, no referrer.
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../cloud/config.js';
-import { cleanProps, privacySignal, deviceClass, hostAllowed } from './events.js';
-import { createQueue, classify } from './queue.js';
+import { cleanProps, privacySignal, deviceClass, hostAllowed } from './kinds.js';
+import { createQueue, classify } from './outbox.js';
 
 const INSTALL_KEY = 'learn-git:aid';
 const SESSION_KEY = 'learn-git:asid';

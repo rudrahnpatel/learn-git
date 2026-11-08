@@ -15,7 +15,7 @@ import { loadState, saveState, resetState, freshCourse, deviceId, STATE_KEY } fr
 import { record, writeMirrors, balance, stashKey } from '../wallet.js';
 import { ITEMS, itemById } from './cosmetics.js';
 import { CARDS } from '../content/cards.js';
-import { track } from '../analytics/track.js';
+import { track } from '../learnlog.js';
 
 export let G = loadState();
 // Cloud sync (js/cloud/) sets a hook while someone is signed in: it stamps the save and queues a push.

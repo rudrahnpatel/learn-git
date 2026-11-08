@@ -1,6 +1,6 @@
 // /admin: the user list with a progress summary, an edit drawer per user (progress numbers, lesson
 // progress, course reset, admin rights, ban) and delete, plus the Analytics view (#analytics,
-// admin/analytics.js). Every check that matters runs in Postgres
+// admin/lesson-report.js). Every check that matters runs in Postgres
 // (the admin_* functions in supabase/schema.sql check the signed-in JWT's email against the admins
 // table), so this page holds no secrets: anyone can load it, and anyone who isn't an admin just sees
 // "Not authorised". Online-only, not in the service-worker cache.
@@ -13,7 +13,7 @@ import { applyTheme } from '../js/theme.js';
 import { toast } from '../js/ui/fx.js';
 import { walletOf, balance } from '../js/wallet.js';
 import { cloudConfigured, getClient, signInWithGoogle, cleanAuthParams, profileOf } from '../js/cloud/client.js';
-import { renderAnalytics } from './analytics.js';
+import { renderAnalytics } from './lesson-report.js';
 
 const root = document.getElementById('admin');
 // The game: /app on Vercel (vercel.json routes it); file servers (the local playground) only have /index.html.
