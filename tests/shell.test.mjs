@@ -266,7 +266,11 @@ test('cat, cat -n, less, head, tail, wc', () => {
   assert.equal(out(sh, 'wc -l notes/todo.txt'), '3 notes/todo.txt\n');
   assert.equal(out(sh, 'wc -l < notes/todo.txt'), '3\n');
   assert.equal(out(sh, 'echo hi there | wc'), '      1       2       9\n');
-  assert.equal(out(sh, 'wc -w a.txt b.log'), '1 a.txt\n2 b.log\n3 total\n');
+  // GNU's width: the digits of the files' total size (here 14 bytes), 7 for a pipe, none for one count of one input
+  assert.equal(out(sh, 'wc -w a.txt b.log'), ' 1 a.txt\n 2 b.log\n 3 total\n');
+  assert.equal(out(sh, 'wc -lw < b.log'), '2 2\n');   // 8 bytes: one digit
+  assert.equal(out(sh, 'cat b.log | wc -lw'), '      2       2\n');
+  assert.equal(out(sh, 'wc -l - < b.log'), '2 -\n');
   assert.equal(err(sh, 'cat nope', 1), 'cat: nope: No such file or directory\n');
   assert.equal(err(sh, 'cat notes', 1), 'cat: notes: Is a directory\n');
   assert.match(err(sh, 'head -n x a.txt', 1), /invalid number of lines: 'x'/);
@@ -433,6 +437,12 @@ test('$PATH decides where commands are found', () => {
   assert.equal(out(sh, 'type cd ls hi if'), 'cd is a shell builtin\nls is /usr/bin/ls\nhi is /home/you/bin/hi\nif is a shell keyword\n');
   assert.equal(out(sh, 'command -v ls cd'), '/usr/bin/ls\ncd\n');
   assert.equal(out(sh, '/usr/bin/echo by path'), 'by path\n');
+  // in an assignment, ~ also expands after a colon (bash does), so the usual PATH=$PATH:~/bin works
+  out(sh, 'PATH=/usr/bin:/bin:~/bin');
+  assert.equal(out(sh, 'echo $PATH'), '/usr/bin:/bin:/home/you/bin\n');
+  assert.equal(out(sh, 'hi'), 'hello from hi\n');
+  assert.equal(out(sh, 'x=a:~:b:~/c; echo $x'), 'a:/home/you:b:/home/you/c\n');
+  assert.equal(out(sh, 'x=a:~x; echo $x; echo a:~/b'), 'a:~x\na:~/b\n', 'not ~user, and not in a plain argument');
 });
 
 /* ================================================================== permissions */

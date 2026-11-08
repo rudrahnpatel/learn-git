@@ -135,11 +135,14 @@ test('the course registry: git and bash playable, each with its engine', async (
   assert.equal(playableId('nope'), 'git');
   assert.equal(engineOf('git'), 'git');
   assert.equal(engineOf('bash'), 'shell');
-  // the bash content loads through the registry, and placement only skips units that exist (the first release
-  // has four), never all of them
+  // the bash content loads through the registry, and placement only skips units that exist (units 1-8 so far),
+  // never all of them
   const units = await bash.load();
-  assert.equal(units.length, 4);
-  assert.deepEqual(units.map((u) => u.id), ['bash-steps', 'bash-files', 'bash-reading', 'bash-pipes']);
+  assert.equal(units.length, 8);
+  assert.deepEqual(units.map((u) => u.id), ['bash-steps', 'bash-files', 'bash-reading', 'bash-pipes', 'bash-search', 'bash-text', 'bash-perms', 'bash-vars']);
+  // "I pipe and grep" skips units 1-4 (the design says so); "I write scripts" waits for units 9+
+  assert.equal(bash.placements.find((p) => /pipe and grep/.test(p.label))?.skip, 4);
+  assert.ok(!bash.placements.some((p) => /scripts/.test(p.label)));
   assert.ok(bash.placements.length >= 2 && bash.placements[0].skip === 0);
   for (const p of bash.placements) assert.ok(Number.isInteger(p.skip) && p.skip >= 0 && p.skip < units.length, p.label);
 });

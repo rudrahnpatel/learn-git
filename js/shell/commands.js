@@ -533,11 +533,17 @@ function wc(c, args) {
   const which = o.l || o.w || o.c || o.m ? ['l', 'w', 'c', 'm'].filter((k) => o[k]) : ['l', 'w', 'c'];
   const chunks = c.inputs(rest);
   const count = (t) => ({ l: (t.match(/\n/g) || []).length, w: (t.match(/\S+/g) || []).length, c: new TextEncoder().encode(t).length, m: [...t].length });
-  const rows = chunks.map((ch) => ({ name: ch.name === '-' ? '' : ch.name, n: count(ch.text) }));
+  const rows = chunks.map((ch) => ({ name: rest.length ? ch.name : '', n: count(ch.text) }));
   if (rows.length > 1) rows.push({ name: 'total', n: ['l', 'w', 'c', 'm'].reduce((acc, k) => ({ ...acc, [k]: rows.reduce((s, r) => s + r.n[k], 0) }), {}) });
-  const fromStdin = !rest.length;
-  const width = fromStdin && which.length > 1 ? 7 : Math.max(1, ...rows.flatMap((r) => which.map((k) => String(r.n[k]).length)));
-  for (const r of rows) c.line(which.map((k) => String(r.n[k]).padStart(fromStdin && which.length === 1 ? 0 : width)).join(' ') + (r.name ? ' ' + r.name : ''));
+  // GNU's column width: one count of one input is not padded; otherwise the digits of the inputs' total size in
+  // bytes, at least 7 when an input is a pipe (`ls | wc`), so `wc -l a b` lines up as " 2 a", " 1 b", " 3 total".
+  let width = 1;
+  if (which.length > 1 || chunks.length > 1) {
+    const pipe = chunks.some((ch) => ch.stdin && !c.io.stdin?.file);
+    const bytes = chunks.reduce((s, ch) => s + new TextEncoder().encode(ch.text).length, 0);
+    width = Math.max(String(bytes).length, pipe ? 7 : 1);
+  }
+  for (const r of rows) c.line(which.map((k) => String(r.n[k]).padStart(width)).join(' ') + (r.name ? ' ' + r.name : ''));
 }
 
 function touch(c, args) {

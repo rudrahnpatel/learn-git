@@ -381,8 +381,22 @@ export function parse(src) {
     const rest = f.v.slice(m[0].length);
     const parts = [...(rest ? [{ k: 'lit', v: rest, q: 0 }] : []), ...t.parts.slice(1)];
     // `~` right after = expands too (bash does this for assignments)
-    if (parts[0]?.k === 'lit' && parts[0].q === 0 && /^~(\/|$)/.test(parts[0].v)) parts.splice(0, 1, { k: 'tilde' }, ...(parts[0].v.length > 1 ? [{ k: 'lit', v: parts[0].v.slice(1), q: 0 }] : []));
-    return { name: m[1], append: m[2] === '+', value: { parts } };
+    if (parts[0]?.k === 'lit' && parts[0].q === 0 && /^~(\/|:|$)/.test(parts[0].v)) parts.splice(0, 1, { k: 'tilde' }, ...(parts[0].v.length > 1 ? [{ k: 'lit', v: parts[0].v.slice(1), q: 0 }] : []));
+    // ... and so does `~` right after a `:` (PATH=$PATH:~/bin)
+    const out = [];
+    parts.forEach((pt, n) => {
+      if (pt.k !== 'lit' || pt.q !== 0 || !pt.v.includes(':~')) { out.push(pt); return; }
+      const last = n === parts.length - 1;
+      const bits = pt.v.split(/(?<=:)~(?=\/|:|$)/);
+      bits.forEach((b, j) => {
+        if (j > 0) {
+          if (!b && j === bits.length - 1 && !last) { out.push({ k: 'lit', v: '~', q: 0 }); return; }   // ~$X: not a tilde-prefix
+          out.push({ k: 'tilde' });
+        }
+        if (b) out.push({ k: 'lit', v: b, q: 0 });
+      });
+    });
+    return { name: m[1], append: m[2] === '+', value: { parts: out } };
   }
 
   const prog = list(null, { allowEmpty: true });

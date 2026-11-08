@@ -36,11 +36,12 @@ export const COURSES = [
     id: 'bash', title: 'Linux CLI & bash', short: 'bash', blurb: 'Files, pipes, permissions and scripts in a real shell.',
     icon: BASH_ICON, accent: 'green', available: true, engine: 'shell',
     load: () => import('./content/bash/index.js').then((m) => m.UNITS),
-    // the first release has units 1-4 (Terminal basics), so placement can skip at most three of them
+    // units 1-8 exist; "I write scripts" (skip to unit 9) returns with the scripting units
     placements: [
       { label: 'I\'ve never used a terminal', note: 'Start at the very first prompt.', skip: 0 },
       { label: 'I can move around', note: 'Skip first steps: start with files and folders.', skip: 1 },
       { label: 'I copy, move and read files', note: 'Start at pipes and redirection.', skip: 3 },
+      { label: 'I pipe and grep', note: 'Skip the basics: start with searching, text and permissions.', skip: 4 },
     ],
   },
 ];

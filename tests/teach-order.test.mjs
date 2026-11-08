@@ -225,7 +225,13 @@ test('the parser reads commands, flags and revision syntax', () => {
 //   `cmd ls`, `ls -a` (flags per command; `-la` splits into -l -a; `-5` is `-<n>`; `tail -n +3` adds `tail +N`),
 //   `op |`, `op >`, `op >>`, `op <`, `op <<<`, `op 2>`, `op 2>>`, `op 2>&1`, `op &>`, `op &&`, `op ||`, `op ;`,
 //   `glob *`, `glob ?`, `glob []`, `brace {,}`, `brace {..}`, `quote "`, `quote '`, `escape \`,
-//   `path /` (absolute), `path ~`, `path ..`, `path .`, `path /dev/null`, `var $`.
+//   `path /` (absolute), `path ~`, `path ..`, `path .`, `path /dev/null`, `var $` (also inside "…"), `var ${ }`,
+//   `var $?`, `assign =` (name=value), `subst $( )` (its inside is read as a command line), `math $(( ))`;
+//   find's word options whole (`find -name`), a command run by `xargs` or `-exec` read as a command
+//   (`find -exec`, `cmd rm`); a value stuck to a flag ignored (`cut -d:` is `cut -d`);
+//   inside quoted programs: grep's pattern (`regex ^ $ . * [] | + ? ()`, the last four with -E or `\|`),
+//   sed's script (`sed s///`, `sed s///g`, `sed p`, `sed d`, `sed /re/`), awk's program (`awk $N`, `awk $NF`,
+//   `awk $0`, `awk NR`, `awk NF`, `awk END`, `awk BEGIN`, `awk +=`, `awk printf`, `awk condition`, `awk /re/`).
 // A string is read as a command line when its first word is a command the engine knows (`ls -a`, `cd ..`); any
 // other string (a file name in a prompt, `*.txt`, `~/notes`) still contributes its globs, paths and operators.
 // `&&` and `;` are only needed where they can't be split (a build tile, a fill, an outcome command): a typed answer
@@ -234,7 +240,20 @@ test('the parser reads commands, flags and revision syntax', () => {
 const BASH_CMDS = new Set(new Shell().completions().shell);
 const OPS = ['2>&1', '<<<', '&>>', '2>>', '&>', '2>', '>>', '&&', '||', '>', '<', '|', ';'];
 const REDIRS = new Set(['>', '>>', '<', '<<<', '2>', '2>>', '&>', '&>>', '2>&1']);
-// a line as words and operators, quotes kept inside the words
+// the index just after the `)` that closes the `(` at s[k] (quotes inside are skipped)
+function closeParen(s, k) {
+  let depth = 0, i = k;
+  while (i < s.length) {
+    const c = s[i];
+    if (c === '\\') { i += 2; continue; }
+    if (c === "'" || c === '"') { const j = s.indexOf(c, i + 1); i = j < 0 ? s.length : j + 1; continue; }
+    if (c === '(') depth++;
+    else if (c === ')' && --depth === 0) return i + 1;
+    i++;
+  }
+  return s.length;
+}
+// a line as words and operators, quotes and $( ) kept inside the words
 export function bashTokens(line) {
   const out = [];
   const s = String(line);
@@ -243,7 +262,13 @@ export function bashTokens(line) {
   while (i < s.length) {
     const c = s[i];
     if (c === '\\' && i + 1 < s.length) { cur += c + s[i + 1]; inWord = true; i += 2; continue; }
-    if (c === '"' || c === "'") { const j = s.indexOf(c, i + 1); const end = j < 0 ? s.length : j + 1; cur += s.slice(i, end); inWord = true; i = end; continue; }
+    if (c === '$' && s[i + 1] === '(') { const end = closeParen(s, i + 1); cur += s.slice(i, end); inWord = true; i = end; continue; }
+    if (c === "'") { const j = s.indexOf(c, i + 1); const end = j < 0 ? s.length : j + 1; cur += s.slice(i, end); inWord = true; i = end; continue; }
+    if (c === '"') {
+      let j = i + 1;
+      while (j < s.length && s[j] !== '"') j = s[j] === '\\' ? j + 2 : s[j] === '$' && s[j + 1] === '(' ? closeParen(s, j + 1) : j + 1;
+      const end = Math.min(j + 1, s.length); cur += s.slice(i, end); inWord = true; i = end; continue;
+    }
     if (/\s/.test(c)) { push(); i++; continue; }
     const op = OPS.find((o) => s.startsWith(o, i));
     if (op && !(op.startsWith('2') && inWord)) { push(); out.push({ op }); i += op.length; continue; }
@@ -253,9 +278,31 @@ export function bashTokens(line) {
   return out;
 }
 function wordItems(w, out) {
+  // $( ) and $(( )) first (not inside single quotes): a command line of its own, or arithmetic
+  let flat = '', dq = false;
+  for (let i = 0; i < w.length;) {
+    const c = w[i];
+    if (c === '\\') { flat += w.slice(i, i + 2); i += 2; continue; }
+    if (c === "'" && !dq) { const j = w.indexOf("'", i + 1); const end = j < 0 ? w.length : j + 1; flat += w.slice(i, end); i = end; continue; }
+    if (c === '"') dq = !dq;
+    if (c === '$' && w[i + 1] === '(') {
+      const end = closeParen(w, i + 1);
+      const inner = w.slice(i + 2, end - 1);
+      if (inner.startsWith('(')) out.add('math $(( ))');
+      else { out.add('subst $( )'); for (const x of bashItems(inner)) out.add(x); }
+      flat += 'S'; i = end; continue;
+    }
+    flat += c; i++;
+  }
+  w = flat;
+  // variables, also inside double quotes (never inside single ones)
+  const vars = w.replace(/'[^']*'/g, '').replace(/\\./g, '');
+  if (/\$[A-Za-z_]|\$\{\w+\}/.test(vars)) out.add('var $');
+  if (/\$\{\w+\}/.test(vars)) out.add('var ${ }');
+  if (/\$\?/.test(vars)) out.add('var $?');
   const unq = w.replace(/"[^"]*"|'[^']*'/g, (m) => { out.add(m[0] === '"' ? 'quote "' : "quote '"); return 'Q'; });
   if (/\\ /.test(unq)) out.add('escape \\');
-  const bare = unq.replace(/\\./g, 'E');
+  const bare = unq.replace(/\\./g, 'E').replace(/\$[?#@*$!0-9]/g, 'V');   // $? is not a glob
   if (/\*/.test(bare)) out.add('glob *');
   if (/\?/.test(bare)) out.add('glob ?');
   if (/\[[^\]]+\]/.test(bare)) out.add('glob []');
@@ -266,21 +313,69 @@ function wordItems(w, out) {
   if (/^~/.test(bare)) out.add('path ~');
   if (/(^|\/)\.\.(\/|$)/.test(bare)) out.add('path ..');
   if (bare === '.' || bare.startsWith('./')) out.add('path .');
-  if (/\$\w/.test(bare)) out.add('var $');
 }
 function bashFlagItems(cmd, t) {
   if (t === '-' || t === '--') return [`${cmd} ${t}`];
   if (t.startsWith('--')) return [`${cmd} ${t.split('=')[0]}`];
   if (/^-\d+$/.test(t)) return [`${cmd} -<n>`];
+  if (cmd === 'find' && /^-[a-z]{2,}$/.test(t)) return [`${cmd} ${t}`];   // find's options are words: -name, -type
   const m = /^-([a-zA-Z]+)\d*$/.exec(t);
   if (m) return [...m[1]].map((c) => `${cmd} -${c}`);
+  if (/^-[a-zA-Z]/.test(t)) return [`${cmd} -${t[1]}`];                   // a value stuck to it: -d: -F, -t,
   return [`${cmd} ${t}`];
 }
+const unquote = (w) => w.replace(/^'([\s\S]*)'$/, '$1').replace(/^"([\s\S]*)"$/, '$1');
+// what a grep/sed pattern uses: anchors, any character, repeats, sets, and with -E alternation and groups
+function regexItems(p, ere, out) {
+  const s = p.replace(/\\\\/g, '');
+  if (/^\^/.test(s)) out.add('regex ^');
+  if (/[^\\]\$$|^\$$/.test(s)) out.add('regex $');
+  if (/(^|[^\\])\./.test(s)) out.add('regex .');
+  if (/(^|[^\\])\*/.test(s)) out.add('regex *');
+  if (/(^|[^\\])\[/.test(s)) out.add('regex []');
+  if (ere ? /(^|[^\\])\|/.test(s) : /\\\|/.test(s)) out.add('regex |');
+  if (ere && /(^|[^\\])\+/.test(s)) out.add('regex +');
+  if (ere && /(^|[^\\])\?/.test(s)) out.add('regex ?');
+  if (ere && /(^|[^\\])\(/.test(s)) out.add('regex ()');
+}
+// a sed script: `sed s///`, `sed s///g`, `sed p`, `sed d`, `sed /re/` (an address), plus its patterns
+function sedItems(script, ere, out) {
+  for (const part of script.split(/;|\n/)) {
+    const m = /^\s*(\/((?:[^/\\]|\\.)*)\/|\$|\d+)?(,(\/(?:[^/\\]|\\.)*\/|\$|\d+))?\s*!?\s*([a-z=])([\s\S]*)$/.exec(part);
+    if (!m) continue;
+    if (m[2] !== undefined) { out.add('sed /re/'); regexItems(m[2], ere, out); }
+    const [cmd, rest] = [m[5], m[6]];
+    if (cmd === 's' && rest) {
+      const d = rest[0];
+      const bits = rest.slice(1).split(d);
+      out.add('sed s///');
+      regexItems(bits[0] || '', ere, out);
+      if (/g/.test(bits[2] || '')) out.add('sed s///g');
+    } else if (cmd === 'p' || cmd === 'd') out.add(`sed ${cmd}`);
+  }
+}
+// an awk program: fields, NR/NF, a condition, END/BEGIN, sums
+function awkItems(prog, out) {
+  if (/\$NF\b/.test(prog)) out.add('awk $NF');
+  if (/\$[1-9]/.test(prog)) out.add('awk $N');
+  if (/\$0\b/.test(prog)) out.add('awk $0');
+  if (/\bNR\b/.test(prog)) out.add('awk NR');
+  if (/(^|[^$])\bNF\b/.test(prog)) out.add('awk NF');
+  if (/\bEND\b/.test(prog)) out.add('awk END');
+  if (/\bBEGIN\b/.test(prog)) out.add('awk BEGIN');
+  if (/\+=/.test(prog)) out.add('awk +=');
+  if (/\bprintf\b/.test(prog)) out.add('awk printf');
+  const head = prog.trim().split('{')[0].trim();
+  if (head && !/^(BEGIN|END)$/.test(head)) out.add(/^\/.*\/$/.test(head) ? 'awk /re/' : 'awk condition');
+}
+// options of grep/sed/awk that take a value (the word after them is not the pattern or program)
+const PROGRAM_VALS = { grep: ['-e', '-f', '-m'], sed: ['-e', '-f'], awk: ['-F', '-v', '-f'] };
 // The items in some command lines (needed by an exercise, or taught by a learn card).
 export function bashItems(text, { splitOps = true } = {}) {
   const out = new Set();
   for (const raw of decode(String(text)).split('\n')) {
-    let start = true, cmd = null, prev = null;
+    let start = true, cmd = null, prev = null, flags = new Set(), program = false;
+    const begin = (w) => { cmd = w; flags = new Set(); program = false; out.add(`cmd ${w}`); };
     for (const t of bashTokens(raw.trim().replace(/^\$\s+/, ''))) {
       if (t.op) {
         if (splitOps || !['&&', ';'].includes(t.op)) out.add(`op ${t.op}`);
@@ -290,14 +385,23 @@ export function bashItems(text, { splitOps = true } = {}) {
       const w = t.w;
       if (REDIRS.has(prev)) { wordItems(w, out); prev = w; continue; }   // a redirect's file name
       if (start) {
+        const a = /^[A-Za-z_]\w*=/.exec(w);
+        if (a) { out.add('assign ='); wordItems(w.slice(a[0].length), out); prev = w; continue; }   // name=value (cmd)
         start = false;
         cmd = BASH_CMDS.has(w) ? w : null;
-        if (cmd) { out.add(`cmd ${w}`); prev = w; continue; }
+        if (cmd) { begin(w); prev = w; continue; }
       }
-      if (cmd && (w === '-' || /^-[^\d]/.test(w))) for (const f of bashFlagItems(cmd, w)) out.add(f);
+      // a command run by another: xargs grep -l, find … -exec rm {} \;
+      if ((cmd === 'xargs' || prev === '-exec') && !w.startsWith('-') && BASH_CMDS.has(w)) { if (prev === '-exec') out.add('find -exec'); begin(w); prev = w; continue; }
+      if (cmd && (w === '-' || /^-[^\d]/.test(w))) { for (const f of bashFlagItems(cmd, w)) { out.add(f); flags.add(f.split(' ')[1]); } }
       else if (cmd && /^-\d+$/.test(w)) out.add(`${cmd} -<n>`);
       else {
         if (cmd === 'tail' && /^\+\d+$/.test(w) && prev === '-n') out.add('tail +N');
+        const valueOf = (PROGRAM_VALS[cmd] || []).includes(prev);
+        const isProgram = prev === '-e' || (!program && !valueOf && !flags.has('-e'));
+        if (cmd === 'grep' && isProgram && !flags.has('-F')) { program = true; regexItems(unquote(w), flags.has('-E'), out); }
+        else if (cmd === 'sed' && isProgram) { program = true; sedItems(unquote(w), flags.has('-E'), out); }
+        else if (cmd === 'awk' && isProgram) { program = true; awkItems(unquote(w), out); }
         wordItems(w, out);
       }
       prev = w;
@@ -402,4 +506,18 @@ test('bash: the parser reads commands, flags, operators, globs and paths', () =>
   assert.deepEqual(s('Lists the folder'), []);
   assert.deepEqual(s('rm my\\ file.txt'), ['cmd rm', 'escape \\']);
   assert.deepEqual(s('$ echo hi > a.txt'), ['cmd echo', 'op >']);
+  // units 5-8: patterns, programs, find, xargs, variables
+  assert.deepEqual(s("grep -E '^(INFO|WARN)' app.log"), ['cmd grep', 'grep -E', "quote '", 'regex ()', 'regex ^', 'regex |']);
+  assert.deepEqual(s('grep -n ERROR app.log'), ['cmd grep', 'grep -n']);
+  assert.deepEqual(s('grep "e.r$" f'), ['cmd grep', 'quote "', 'regex $', 'regex .']);
+  assert.deepEqual(s("sed -n '/ERROR/p' f"), ['cmd sed', "quote '", 'sed -n', 'sed /re/', 'sed p']);
+  assert.deepEqual(s("sed 's/a/b/g' f"), ['cmd sed', "quote '", 'sed s///', 'sed s///g']);
+  assert.deepEqual(s("awk -F, 'NR > 1 {s += $3} END {print s}' f"), ['awk $N', 'awk +=', 'awk -F', 'awk END', 'awk NR', 'awk condition', 'cmd awk', "quote '"]);
+  assert.deepEqual(s('cut -d: -f1 /etc/passwd'), ['cmd cut', 'cut -d', 'cut -f', 'path /']);
+  assert.deepEqual(s('find . -name "*.tmp" -exec rm {} \\;'), ['cmd find', 'cmd rm', 'find -exec', 'find -name', 'path .', 'quote "']);
+  assert.deepEqual(s('find src -name "*.js" | xargs grep -l TODO'), ['cmd find', 'cmd grep', 'cmd xargs', 'find -name', 'grep -l', 'op |', 'quote "']);
+  assert.deepEqual(s('n=$((n + 1))'), ['assign =', 'math $(( ))']);
+  assert.deepEqual(s('echo "Files: $(ls | wc -l)"'), ['cmd echo', 'cmd ls', 'cmd wc', 'op |', 'quote "', 'subst $( )', 'wc -l']);
+  assert.deepEqual(s('echo "$name" ${name}s \'$x\''), ['cmd echo', 'quote "', "quote '", 'var $', 'var ${ }']);
+  assert.deepEqual(s('echo $?'), ['cmd echo', 'var $?']);
 });

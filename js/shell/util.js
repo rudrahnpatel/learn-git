@@ -8,7 +8,8 @@ export class ShellError extends Error {
 
 // Input stream for stdin: a string with a read cursor, shared by `read` calls in a loop.
 export class Input {
-  constructor(data, { tty = false } = {}) { this.data = String(data ?? ''); this.pos = 0; this.tty = tty; }
+  // `file`: the input is a regular file (`< f`), which some tools treat differently from a pipe (wc's column width)
+  constructor(data, { tty = false, file = false } = {}) { this.data = String(data ?? ''); this.pos = 0; this.tty = tty; this.file = file; }
   readAll() { const r = this.data.slice(this.pos); this.pos = this.data.length; return r; }
   readLine() {
     if (this.pos >= this.data.length) return null;
@@ -44,10 +45,10 @@ export class Ctx {
   // The text of each input: named files, or stdin when there are none ('-' also means stdin).
   // Errors are reported ("name: f: No such file or directory") and the file is skipped.
   inputs(files, { what = (f, e) => `${f}: ${e.message}` } = {}) {
-    if (!files.length) return [{ name: '-', text: this.stdin() }];
+    if (!files.length) return [{ name: '-', text: this.stdin(), stdin: true }];
     const out = [];
     for (const f of files) {
-      if (f === '-') { out.push({ name: '-', text: this.stdin() }); continue; }
+      if (f === '-') { out.push({ name: '-', text: this.stdin(), stdin: true }); continue; }
       try {
         const n = this.fs.stat(this.abs(f));
         if (n.bin) { out.push({ name: f, text: '', binary: true }); continue; }

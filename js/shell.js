@@ -533,7 +533,7 @@ export class Shell {
       } catch (e) { if (e instanceof ExpandError) { this.shErr(io, e.message); return null; } throw e; }
       const abs = this.abs(target);
       try {
-        if (r.op === '<') { fds[r.fd] = new Input(this.fs.read(abs)); continue; }
+        if (r.op === '<') { fds[r.fd] = new Input(this.fs.read(abs), { file: true }); continue; }
         if (r.op === '>' || r.op === '&>') this.fs.write(abs, '');
         else this.fs.write(abs, '', { append: true });
       } catch (e) {

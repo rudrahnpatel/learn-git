@@ -28,8 +28,8 @@ function runOk(r, cmd, what) {
   const res = r.run(cmd);
   if (!res.ok) throw new Error(`${what}: "${cmd}" failed:\n${res.lines.map((l) => l.t).join('\n')}`);
 }
-// Commands the way the mini terminal sees them: one per line, `&&` / `;` chains split.
-export const splitCommands = (s) => String(s).split(/\n|&&|;/).map((x) => x.trim()).filter(Boolean);
+// Commands the way the mini terminal sees them: one per line, `&&` / `;` chains split (not find's `\;`).
+export const splitCommands = (s) => String(s).split(/\n|&&|(?<!\\);/).map((x) => x.trim()).filter(Boolean);
 
 // A graph's visible identity: shape (parents, orphans) plus refs, independent of commit ids.
 function graphKey(g) {
