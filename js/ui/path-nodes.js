@@ -3,10 +3,15 @@
 // ids and titles as the game (js/ui/path.js).
 import { levelById } from '../levels.js';
 
+// A unit's challenges are v1 git level ids (strings, js/levels.js), or inline puzzles (the bash course:
+// { id, title, blurb, exercises }), which play in the lesson player; a puzzle node carries `puzzle`.
 export function buildNodes(UNITS) {
   const out = [];
   UNITS.forEach((unit, ui) => {
-    const challenges = (unit.challenges || []).filter((id) => levelById(id));
+    const challenges = (unit.challenges || []).filter((c) => (c && typeof c === 'object' ? Array.isArray(c.exercises) : levelById(c)));
+    const chNode = (c) => (typeof c === 'object'
+      ? { id: `${unit.id}:challenge:${c.id}`, kind: 'challenge', unit, ui, levelId: c.id, puzzle: c, title: c.title }
+      : { id: `${unit.id}:challenge:${c}`, kind: 'challenge', unit, ui, levelId: c, title: levelById(c).title });
     let ci = 0, chest = 0;
     const lessons = unit.lessons;
     lessons.forEach((lesson, li) => {
@@ -14,10 +19,10 @@ export function buildNodes(UNITS) {
       if ((li + 1) % 2 === 0) {
         // Release tags keep the old `:chest:` ids so saved progress still matches.
         out.push({ id: `${unit.id}:chest:${chest++}`, kind: 'release', unit, ui, title: 'Release' });
-        if (ci < challenges.length - 1) { const id = challenges[ci++]; out.push({ id: `${unit.id}:challenge:${id}`, kind: 'challenge', unit, ui, levelId: id, title: levelById(id).title }); }
+        if (ci < challenges.length - 1) out.push(chNode(challenges[ci++]));
       }
     });
-    while (ci < challenges.length) { const id = challenges[ci++]; out.push({ id: `${unit.id}:challenge:${id}`, kind: 'challenge', unit, ui, levelId: id, title: levelById(id).title }); }
+    while (ci < challenges.length) out.push(chNode(challenges[ci++]));
     if (lessons.some((l) => l.exercises.some((e) => e.type !== 'learn'))) out.push({ id: `${unit.id}:review`, kind: 'review', unit, ui, title: `${unit.title} review` });
   });
   // Number the release tags like patch releases: v0.<unit>.<crate within the unit> (v0.4.2 = unit 4's second crate),

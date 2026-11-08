@@ -1896,3 +1896,57 @@ body[data-screen="lesson"] .toast { top: auto; bottom: calc(var(--foot-h, 100px)
   .set-row { padding: 12px 14px; }
   .seg-opt { font-size: 14px; padding: 8px 6px; gap: 6px; }
 }
+
+/* ==================================================================== the bash course (.notes/bash-course-terminal-basics.md)
+   The file tree takes the commit graph's place: in the type exercise's left card, in learn demos and as outcome
+   options. Tokens only, so dark mode needs no extra rules. */
+.ftree-wrap { display: block; min-width: 0; }
+.ftree, .ftree .ft-kids { list-style: none; margin: 0; padding: 0; }
+.ftree .ft-kids { padding-left: 18px; border-left: 1px dashed var(--frost-2); margin-left: 7px; }
+.ftree.inline, .ftree.inline .ft-item, .ftree.inline .ft-kids { display: block; }
+.ft-row { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px 2px 4px; margin: 1px 0; border-radius: 10px; max-width: 100%; }
+.ft-ic { flex: none; display: inline-grid; place-items: center; color: var(--mute); }
+.ft-ic.dir { color: var(--iris-text); }
+.ft-name { font-size: 13px; overflow-wrap: anywhere; }
+.ftree.compact .ft-name { font-size: 12px; }
+.ftree.compact .ft-row { padding-block: 0; }
+.ft-row.cwd { background: var(--sky-wash); outline: 1px solid var(--iris-text); outline-offset: -1px; }
+.ft-here { font-size: 10.5px; color: var(--mute); white-space: nowrap; }
+.ft-row.cwd .ft-here { color: var(--ink); }
+.ft-row.pop { animation: ft-pop .5s var(--spring); background: var(--green-wash); }
+.ft-row.pop.cwd { background: var(--sky-wash); }
+@keyframes ft-pop { from { transform: scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* type exercise: the tree fills the left card and scrolls inside it (the type's one filler, as the graph was) */
+.ex-shell .type-left { padding: 12px 14px; }
+.type-files-tree { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.ex-shell .term-form .prompt { max-width: 52%; }
+@media (max-width: 760px) { .ex-shell .term-form .prompt { max-width: 46%; font-size: 11px; } }
+
+/* the symbol row above the phone keyboard (terminal option `symbols`): phones only, desktop keyboards have the keys */
+.sym-row { display: none; }
+@media (max-width: 760px) {
+  .sym-row { display: flex; gap: 3px; padding: 0 8px 8px; }
+  .sym { flex: 1 1 0; min-width: 24px; min-height: 36px; padding: 0; border: 0; border-radius: 10px; background: var(--term-chip); color: var(--term-cmd); font: 15px var(--mono); cursor: pointer; }
+  .sym:active { background: var(--term-chip-hover); }
+  .sym:focus-visible { outline: 2px solid var(--term-cmd); outline-offset: -2px; }
+  .kb .sym-row { padding-bottom: 6px; }
+}
+
+/* learn demo: the tree and what the commands printed */
+.demo-files { min-height: 60px; display: block; overflow: auto; }
+.ex-learn .demo-stage.demo-files { display: block; }
+.demo-out { background: var(--term-bg); color: var(--term-fg); border-radius: 16px; padding: 10px 14px; font-size: 12px; min-height: 2.6em; max-height: 9.5em; overflow-y: auto; }
+.demo-out:empty::before { content: "$"; color: var(--term-quiet); }
+
+/* outcome: options are file trees or printed output, laid out like the graph exercise's options */
+.opt.outcome-opt { min-height: 0; }
+.oc-body { display: block; width: 100%; text-align: left; }
+.oc-out { display: block; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12.5px; line-height: 1.5; background: var(--chalk); border-radius: 12px; padding: 8px 10px; color: var(--ink); }
+.oc-start .gs-col { min-width: 0; }
+.oc-start-tree { min-width: 0; }
+@media (max-width: 760px) { .opt.outcome-opt { padding: 8px 10px; } }
+
+/* placement for a newly opened course (Settings > Switch course) */
+.placement .onb-opts { margin-top: 12px; }
+.place-opt { width: 100%; }

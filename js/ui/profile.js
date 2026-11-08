@@ -8,7 +8,7 @@ import { avatarHTML, twigSVG, wornOutfit } from './twig.js';
 import { topbar } from './topbar.js';
 import { UNITS } from './path.js';
 import { APP, MASCOT, REWARDS } from '../brand.js';
-import { COURSE } from '../content/cards.js';
+import { courseMeta } from '../content/cards.js';
 import * as game from './game.js';
 import { accountCard } from './account.js';
 
@@ -41,6 +41,7 @@ export function heatWeeks(weeks) {
 // The furthest unit with a finished lesson -> "rebase ready" (COURSE.ready labels).
 function readyLabel() {
   let label = null;
+  const COURSE = courseMeta(game.courseId());
   for (const u of UNITS) if (u.lessons.some((l) => game.courseProgress().nodes[`${u.id}:lesson:${l.id}`]?.done)) label = COURSE.ready[u.id] || `${u.title.toLowerCase()} ready`;
   return label || 'just getting started';
 }
@@ -113,8 +114,8 @@ export function renderProfile(root) {
   const head = h('section', { class: 'profile-head' },
     h('a', { class: 'big-avatar', href: '#/shop', 'aria-label': `${MASCOT.name}'s outfit. Open the shop.`, html: avatarHTML('happy') }),
     h('div', { class: 'ph-text' },
-      h('span', { class: 'mono tiny' }, `PROFILE · ${COURSE.name.toUpperCase()} COURSE`),
-      h('h1', {}, s.streak ? `Day ${s.streak}` : s.activeDays ? `${s.activeDays} day${s.activeDays > 1 ? 's' : ''} of ${COURSE.name}` : 'Welcome!'),
+      h('span', { class: 'mono tiny' }, `PROFILE · ${courseMeta(game.courseId()).name.toUpperCase()} COURSE`),
+      h('h1', {}, s.streak ? `Day ${s.streak}` : s.activeDays ? `${s.activeDays} day${s.activeDays > 1 ? 's' : ''} of ${courseMeta(game.courseId()).name}` : 'Welcome!'),
       h('p', { class: 'lede' }, `${s.cards.got} command${s.cards.got === 1 ? '' : 's'} collected · ${s.ready}`),
       h('div', { class: 'ph-actions' },
         h('button', { class: 'btn primary', type: 'button', onclick: () => shareCard() }, 'Share progress', h('span', { class: 'arr' }, ' →')),
@@ -179,7 +180,7 @@ export async function renderShareCard() {
   x.drawImage(await svgImage(twigSVG('cheer'), 240, 280), 137, 125);
   // text
   const ink = tok('ink'), mute = tok('mute');
-  x.fillStyle = mute; x.font = '400 20px "Martian Mono", monospace'; x.fillText(`${APP.name.toUpperCase()} · ${COURSE.name.toUpperCase()} COURSE`, 470, 140);
+  x.fillStyle = mute; x.font = '400 20px "Martian Mono", monospace'; x.fillText(`${APP.name.toUpperCase()} · ${courseMeta(game.courseId()).name.toUpperCase()} COURSE`, 470, 140);
   x.fillStyle = ink; x.font = '400 110px Inter, sans-serif';
   const big = s.streak ? `Day ${s.streak}` : `${s.activeDays || 1} day${s.activeDays === 1 ? '' : 's'} in`;
   x.fillText(big, 462, 250);

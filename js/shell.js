@@ -668,6 +668,38 @@ export class Shell {
     return names.filter((n) => n.startsWith(stem) && (stem.startsWith('.') || !n.startsWith('.')))
       .map((n) => dirPart + n + (this.s.nodes[joinPath(abs, n)].type === 'dir' ? '/' : ''));
   }
+  // Tab completion for a whole input line, the way bash does it: the first word of a command (at the start or after
+  // | ; && || or a `(`) completes command names, `$X` completes variable names, `~`/`~/x` and anything else a path.
+  // Returns { line, options }: the completed line (unchanged when nothing or several things match) and the matches
+  // (shown as a listing when there is more than one). A single directory match ends in `/`, a single file in a space.
+  complete(line) {
+    const v = String(line);
+    const m = /((?:\\.|\S)*)$/.exec(v);
+    const word = m[1], before = v.slice(0, v.length - word.length);
+    const head = word.replace(/^.*[|;&<>(]/, '');   // `ls|wc` or `cat>out` glue: complete the part after the operator
+    const pre = word.slice(0, word.length - head.length);
+    const cmdPos = pre ? /[|;&(]$/.test(pre) : !before.trim() || /[|;&(]\s*$/.test(before);
+    let cands, stem = head, prefixOut = '', esc = false;
+    if (head.startsWith('$')) { stem = head.slice(1); prefixOut = '$'; cands = Object.keys(this.s.vars).sort(); }
+    else if (cmdPos && !head.includes('/')) cands = this.completions().shell;
+    else {
+      const tilde = (head === '~' ? '~/' : head).replace(/\\(.)/g, '$1');   // `my\ fi` matches `my file.txt`
+      cands = this.completePath(tilde.startsWith('~/') ? this.s.home + tilde.slice(1) : tilde)
+        .map((c) => (tilde.startsWith('~/') ? '~' + c.slice(this.s.home.length) : c));
+      stem = tilde;
+      esc = true;
+    }
+    const hits = [...new Set(cands)].filter((c) => c.startsWith(stem));
+    if (!hits.length) return { line: v, options: [] };
+    const out = (s) => before + pre + prefixOut + (esc ? s.replace(/([ '"\\])/g, '\\$1') : s);
+    if (hits.length === 1) {
+      const one = hits[0];
+      return { line: out(one) + (one.endsWith('/') ? '' : ' '), options: hits };
+    }
+    let common = hits[0];
+    for (const x of hits) while (!x.startsWith(common)) common = common.slice(0, -1);
+    return { line: common.length > stem.length ? out(common) : v, options: hits };
+  }
   // signals for builtins
   static signals() { return { ExitSignal, LoopSignal, ReturnSignal }; }
 }

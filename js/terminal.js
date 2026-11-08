@@ -19,9 +19,15 @@ const FLAGS = {
 export class Terminal {
   static n = 0; // ids for each terminal's keyboard tip
   // collapse: show only the latest command and its output; earlier entries fold behind a quiet "earlier" button.
-  constructor(container, { onCommand, getCompletions, history = [], onHistory, collapse = true }) {
+  // label/placeholder: the input's name and hint (git by default). complete(line) -> { line, options }: a completer of
+  // its own (the bash course's comes from the engine, Shell.complete) instead of the git one below.
+  // symbols: a row of keys that insert at the cursor (`|`, `>`, `~`...), for phone keyboards that bury them; shown on
+  // narrow screens only (css). Each is [text, spoken name].
+  constructor(container, { onCommand, getCompletions, history = [], onHistory, collapse = true, label = 'Git command', placeholder = null, complete = null, symbols = null, plain = false }) {
+    this.plain = plain;   // shell output: no diff colouring (an `ls -l` line starts with -rw-)
     this.onCommand = onCommand;
     this.getCompletions = getCompletions;
+    this.completer = complete;
     this.history = history;
     this.onHistory = onHistory;
     this.hIdx = history.length;
@@ -34,13 +40,15 @@ export class Terminal {
     this.oldBtn = h('button', { class: 'term-old', type: 'button', hidden: true, 'aria-expanded': 'false', onclick: () => this.toggleOld() });
     this.promptEl = h('span', { class: 'prompt' }, '$');
     const tip = h('span', { class: 'sr-only', id: 'term-tip-' + (++Terminal.n) }, 'Press Enter to run. Tab completes a name; with nothing left to complete, Tab moves on. Up and down arrows recall earlier commands.');
-    this.input = h('input', { class: 'term-in', type: 'text', spellcheck: 'false', autocomplete: 'off', autocapitalize: 'off', 'aria-label': 'Git command', 'aria-describedby': tip.id, placeholder: phone() ? 'git command…' : 'type a command, e.g. git status' });
+    this.input = h('input', { class: 'term-in', type: 'text', spellcheck: 'false', autocomplete: 'off', autocapitalize: 'off', autocorrect: 'off', 'aria-label': label, 'aria-describedby': tip.id, placeholder: placeholder ?? (phone() ? 'git command…' : 'type a command, e.g. git status') });
     this.chips = h('div', { class: 'chips', role: 'group', 'aria-label': 'Suggested commands' });
     this.chipsMore = h('div', { class: 'chips chips-more', hidden: true, role: 'group', 'aria-label': 'More suggestions' });
     const form = h('form', { class: 'term-form', onsubmit: (e) => { e.preventDefault(); this.submit(); } },
       this.promptEl, this.input, tip, keepFocus(h('button', { class: 'run', type: 'submit', 'aria-label': 'Run' }, h('span', { 'aria-hidden': 'true' }, '⏎'))));
     keepFocus(this.oldBtn);
-    this.el = h('div', { class: 'terminal', onclick: (e) => { if (e.target === this.out || e.target === this.el) this.input.focus(); } }, this.oldBtn, this.out, this.chips, this.chipsMore, form);
+    this.symRow = symbols ? h('div', { class: 'sym-row', role: 'group', 'aria-label': 'Symbols' }, symbols.map(([t, name]) =>
+      keepFocus(h('button', { class: 'sym mono', type: 'button', 'aria-label': `Insert ${name}`, onclick: () => this.insertText(t) }, t)))) : null;
+    this.el = h('div', { class: 'terminal', onclick: (e) => { if (e.target === this.out || e.target === this.el) this.input.focus(); } }, this.oldBtn, this.out, this.chips, this.chipsMore, form, this.symRow);
     container.append(this.el);
     this.input.addEventListener('keydown', (e) => this.key(e));
   }
@@ -70,7 +78,7 @@ export class Terminal {
     for (const l of lines) {
       let cls = l.c || '';
       const t = l.t;
-      if (!cls) {
+      if (!cls && !this.plain) {
         if (/^diff --git|^index |^(---|\+\+\+) /.test(t)) cls = 'meta';
         else if (t.startsWith('+')) cls = 'add';
         else if (t.startsWith('-')) cls = 'del';
@@ -112,6 +120,14 @@ export class Terminal {
     const caret = text.endsWith('""') ? text.length - 1 : text.length;
     this.input.setSelectionRange(caret, caret);
   }
+  // a symbol key: put the text at the cursor (replacing a selection) and keep typing
+  insertText(t) {
+    if (this.input.disabled) return;
+    const i = this.input, a = i.selectionStart ?? i.value.length, b = i.selectionEnd ?? a;
+    i.setRangeText(t, a, b, 'end');
+    this.focus();
+    i.dispatchEvent(new Event('input', { bubbles: true }));
+  }
   insertWord(word) {
     const v = this.input.value;
     this.input.value = !v || v.endsWith(' ') ? v + word : v + ' ' + word;
@@ -151,6 +167,12 @@ export class Terminal {
   // Tab completion. Returns true when the line changed (a listing of several matches leaves it as it was).
   complete() {
     const v = this.input.value;
+    if (this.completer) {
+      const r = this.completer(v);
+      if (r.line !== v) { this.input.value = r.line; return true; }
+      if (r.options.length > 1) this.print([{ t: r.options.join('   '), c: 'hint' }]);
+      return false;
+    }
     const words = v.split(/\s+/);
     const cur = words[words.length - 1];
     const c = this.getCompletions();

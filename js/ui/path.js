@@ -61,6 +61,8 @@ let NODES = [];
 function index() {
   EX = new Map();
   for (const unit of UNITS) for (const lesson of unit.lessons) lesson.exercises.forEach((ex, i) => EX.set(exKey(lesson, ex, i), { ex, unit, lesson, key: exKey(lesson, ex, i) }));
+  // inline puzzles (the bash course's challenges) can put exercises in the mistakes deck too
+  for (const unit of UNITS) for (const c of unit.challenges || []) if (c && typeof c === 'object') (c.exercises || []).forEach((ex, i) => EX.set(exKey(c, ex, i), { ex, unit, lesson: c, key: exKey(c, ex, i) }));
   NODES = buildNodes(UNITS);
 }
 export const exerciseByKey = (k) => EX.get(k) || null;
@@ -72,9 +74,10 @@ export const nodeById = (id) => NODES.find((n) => n.id === id) || null;
 export const nodeForLevel = (levelId) => NODES.find((n) => n.kind === 'challenge' && n.levelId === levelId) || null;
 
 const progress = () => courseProgress(loadedCourse);
-// Challenge nodes are v1 git levels, recorded in the git course's challenges (see game.completeChallenge).
+// Challenge nodes are v1 git levels, recorded in the git course's challenges (see game.completeChallenge); an
+// inline puzzle (n.puzzle, the bash course) is recorded in its own course's challenges (game.completePuzzle).
 export function isDone(n) {
-  if (n.kind === 'challenge') return !!courseProgress('git').challenges[n.levelId];
+  if (n.kind === 'challenge') return !!(n.puzzle ? progress() : courseProgress('git')).challenges[n.levelId];
   return !!progress().nodes[n.id]?.done;
 }
 export const isSkipped = (n) => n.ui < (progress().placement || 0);
@@ -118,7 +121,7 @@ export function nextNodeAfter(n) { const i = NODES.indexOf(n); return NODES.slic
 
 /* ------------------------------------------------------- lesson building */
 function shuffle(a, r = Math.random) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
-const HARD = { learn: 0, choice: 1, match: 1, fill: 2, order: 2, graph: 3, build: 3, type: 4 };
+const HARD = { learn: 0, choice: 1, match: 1, fill: 2, order: 2, graph: 3, outcome: 3, build: 3, type: 4 };
 
 // The first play keeps the authored order. Replays drop the learn cards and shuffle; at higher
 // crowns, harder types come first.
@@ -129,6 +132,8 @@ export function lessonItems(lesson, crown) {
   if (crown >= 2) rest.sort((a, b) => (HARD[b.ex.type] || 0) - (HARD[a.ex.type] || 0) + (Math.random() - 0.5) * 2.5);
   return rest.length ? rest : items;
 }
+// An inline puzzle plays its exercises in order, every time.
+export const puzzleItems = (puzzle) => puzzle.exercises.map((ex, i) => ({ ex, key: exKey(puzzle, ex, i) }));
 export function reviewItems(unit, n = 10) {
   const all = [];
   for (const l of unit.lessons) l.exercises.forEach((ex, i) => { if (ex.type !== 'learn') all.push({ ex, key: exKey(l, ex, i) }); });

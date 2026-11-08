@@ -1,6 +1,6 @@
 // App shell: loads the content bank, applies the streak, and routes between screens.
 //   #/                     the path (or onboarding on the first visit)
-//   #/lesson/<nodeId>      a lesson or unit-review node in the lesson player
+//   #/lesson/<nodeId>      a lesson, unit-review or puzzle-challenge node (the bash course) in the lesson player
 //   #/challenge/<levelId>  a v1 level as a challenge node
 //   #/mistakes             mistakes review      #/practice  the practice hub
 //   #/speed  #/bisect  #/sandbox                arcade modes
@@ -12,7 +12,8 @@ import { applyTheme, applyAccent } from './theme.js';
 import { toast, ICON, setShapes } from './ui/fx.js';
 import { releaseAll } from './dom.js';
 import * as game from './ui/game.js';
-import { loadContent, loadedCourse, nodeById, nodeForLevel, nodeStatus, currentNode, crowns, lessonItems, reviewItems, exerciseByKey, unitComplete } from './ui/path.js';
+import { loadContent, loadedCourse, nodeById, nodeForLevel, nodeStatus, currentNode, crowns, lessonItems, reviewItems, puzzleItems, exerciseByKey, unitComplete } from './ui/path.js';
+import { engineOf } from './courses.js';
 import { renderOnboarding } from './ui/onboarding.js';
 import { renderHome } from './ui/home.js';
 import { playSession } from './ui/lesson.js';
@@ -87,6 +88,7 @@ function homeRoute() {
 
 function lessonRoute(id) {
   const node = nodeById(id);
+  if (node?.puzzle) return puzzleRoute(node);
   if (!node || (node.kind !== 'lesson' && node.kind !== 'review')) return goHome();
   if (nodeStatus(node) === 'locked') { toast('That one is still locked.', { icon: ICON.lock() }); return goHome(); }
   const items = node.kind === 'lesson' ? lessonItems(node.lesson, crowns(node)) : reviewItems(node.unit);
@@ -95,7 +97,7 @@ function lessonRoute(id) {
   const mode = node.kind === 'review' ? 'review' : 'lesson';
   track('lesson_start', { node: node.id, mode, crowns: crowns(node), total: items.length });
   cleanup = playSession(app, {
-    title: node.title, items, mode,
+    title: node.title, items, mode, engine: engineOf(loadedCourse),
     onAnswer: (a) => track('exercise_answer', { node: node.id, ...a }),
     onQuit: (p) => { track('lesson_quit', { node: node.id, mode, ...p }); goHome(); },
     onFinish: (res) => {
@@ -111,6 +113,31 @@ function lessonRoute(id) {
       const curAfter = currentNode()?.id;
       celebrate({ title: node.kind === 'review' ? REWARDS.reviewDone : REWARDS.lessonDone, xpEvent, res, popNode: wasDone || curAfter === curBefore ? null : curAfter, newCards,
         branch: node.kind === 'review' ? `review/${branchSlug(node.unit.title)}` : `lesson/${branchSlug(node.title)}`, color: node.unit.color });
+    },
+  });
+}
+
+// A puzzle challenge (the bash course's challenge nodes: a few harder tasks on a live shell) plays in the lesson
+// player. Stars come from first-try accuracy and pay the challenge XP, like a v1 level's.
+function puzzleRoute(node) {
+  if (nodeStatus(node) === 'locked') { toast('That challenge is still locked.', { icon: ICON.lock() }); return goHome(); }
+  const items = puzzleItems(node.puzzle);
+  screen('lesson');
+  track('challenge_start', { level: node.levelId });
+  const wasDone = nodeStatus(node) === 'done';
+  cleanup = playSession(app, {
+    title: node.title, items, mode: 'challenge', engine: engineOf(loadedCourse),
+    onAnswer: (a) => track('exercise_answer', { node: node.id, ...a }),
+    onQuit: () => goHome(),   // like a v1 challenge, leaving one isn't an event
+    onFinish: (res) => {
+      const stars = game.puzzleStars(res.accuracy);
+      track('challenge_done', { level: node.levelId, stars });
+      const xpEvent = game.addXp(game.XP.challenge[stars] + res.bonusXp);
+      game.completePuzzle(node.levelId, stars);
+      markUnit(node);
+      const after = currentNode()?.id;
+      celebrate({ title: 'Challenge complete!', xpEvent, res: { ...res, perfect: stars === 3 }, popNode: wasDone ? null : after,
+        sub: `${stars} of 3 stars.${stars < 3 ? ' Every first try right makes three.' : ''}`, branch: `challenge/${branchSlug(node.title)}`, color: node.unit.color });
     },
   });
 }
@@ -158,7 +185,7 @@ function mistakesRoute() {
   screen('lesson');
   track('lesson_start', { node: 'mistakes', mode: 'mistakes', total: items.length });
   cleanup = playSession(app, {
-    title: 'Mistakes review', items, mode: 'mistakes',
+    title: 'Mistakes review', items, mode: 'mistakes', engine: engineOf(loadedCourse),
     onAnswer: (a) => track('exercise_answer', { node: 'mistakes', ...a }),
     onQuit: (p) => { track('lesson_quit', { node: 'mistakes', mode: 'mistakes', ...p }); location.hash = '#/practice'; },
     onFinish: (res) => {

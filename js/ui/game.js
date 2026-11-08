@@ -271,6 +271,20 @@ export function completeChallenge(levelId, stars) {
   return { first: !prev };
 }
 
+// An inline puzzle (the bash course's challenge nodes) belongs to the active course: courses[id].challenges.
+export function completePuzzle(id, stars) {
+  const ch = courseProgress().challenges;
+  const prev = ch[id];
+  ch[id] = { stars: Math.max(stars, prev?.stars || 0) };
+  if (!prev) G.stats.challenges++;
+  questProgress('challenge');
+  checkAchievements();
+  save();
+  return { first: !prev };
+}
+// Stars for a puzzle from its first-try accuracy: all right 3, at least half 2, else 1.
+export const puzzleStars = (accuracy) => (accuracy >= 1 ? 3 : accuracy >= 0.5 ? 2 : 1);
+
 /* -------------------------------------------------------------- mistakes */
 // The deck is the active course's: its keys are exercise ids from that course's content.
 const BOX_DAYS = [0, 1, 3, 7];
