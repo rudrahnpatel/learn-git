@@ -238,12 +238,12 @@ curl -s -X POST 'https://dgalcekeajfmxwytooig.supabase.co/functions/v1/send-remi
 
    To change one later: `select vault.update_secret((select id from vault.secrets where name = 'learn_git_reminder_secret'), '<new value>');`
 3. SQL Editor → paste [`migrations/push_reminders_cron.sql`](migrations/push_reminders_cron.sql) → Run.
-   It schedules `learn-git-send-reminders` at minute 0 of every hour (UTC).
+   It schedules `learn-git-send-reminders` at minutes 0 and 30 of every hour (UTC).
 
-**Half-hour time zones:** a device is due when its local hour equals its reminder hour, so in India
-(+5:30) the :00 UTC run is :30 local and a 19:00 reminder arrives at 19:30. For on-the-hour
-reminders there, change the schedule to `'0,30 * * * *'` in the cron file and run it again (the
-function sends at most once per device per local day, so extra runs are harmless).
+**Half-hour time zones:** the job runs every half hour so that reminders land on the hour in
+half-hour zones too (India +5:30: the :30 UTC run is 19:00 local). A device is due when its local
+hour equals its reminder hour, and the function sends at most once per device per local day, so the
+second run in whole-hour zones finds it already sent.
 
 Check it: `select * from cron.job_run_details order by start_time desc limit 5;` and
 `select status_code, content from net._http_response order by created desc limit 5;`.

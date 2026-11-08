@@ -1,5 +1,5 @@
 // send-reminders: the daily practice reminder, as Web Push (VAPID).
-// Called hourly by pg_cron (supabase/migrations/push_reminders_cron.sql). For every enabled
+// Called every half hour by pg_cron (supabase/migrations/push_reminders_cron.sql). For every enabled
 // push_subscriptions row whose local hour has come up, whose player hasn't practised today (in that
 // row's time zone) and that wasn't sent one today, it sends one short, streak-aware notification.
 // Dead subscriptions (404/410 from the push service) are deleted. See .notes/push-reminders.md.
