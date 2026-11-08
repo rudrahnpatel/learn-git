@@ -134,8 +134,8 @@ export default {
           explain: 'Same contents, same hash, one blob. The two trees both point at it under different names.',
         },
         {
-          id: 'in2-hash-object', type: 'learn', new: true, title: 'hash-object',
-          body: '<code>git hash-object file</code> prints the blob id a file would get, without committing anything. Real git uses SHA-1 (or SHA-256): 40 or 64 hex digits, usually shortened to 7. This playground shows 7.',
+          id: 'in2-hash-object', type: 'learn', new: true, title: 'hash-object and rev-parse',
+          body: '<code>git hash-object file</code> prints the blob id a file would get, without committing anything. <code>git rev-parse X</code> prints the id behind any name: <code>main</code>, <code>HEAD^{tree}</code>, <code>HEAD:file</code>. Real git ids are 40 hex digits; this playground shows 7.',
         },
         {
           id: 'in2-one-line', type: 'choice',
@@ -247,6 +247,10 @@ export default {
           prompt: 'What git does when you add and commit a change, in order:',
           steps: ['git add stores the file\'s contents as a blob', 'git commit builds trees from the index, up to the root', 'It writes a commit pointing at the root tree and the parent', 'It writes the new commit id into .git/refs/heads/main'],
           explain: 'Moving the branch is the very last step: one small file write. That is why a commit is atomic.',
+        },
+        {
+          id: 'in3-show-ref', type: 'learn', new: true, title: 'All refs at once',
+          body: '<code>git show-ref</code> prints every ref with the id it holds, one per line: <code>&lt;id&gt; refs/heads/main</code>. <code>--heads</code> keeps only your local branches, <code>--tags</code> only tags. Same as reading the files under <code>.git/refs/</code> one by one.',
         },
         {
           id: 'in3-build', type: 'build',

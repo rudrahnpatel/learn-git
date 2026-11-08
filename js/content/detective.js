@@ -110,7 +110,7 @@ export default {
       exercises: [
         {
           id: 'dt2-filters', type: 'learn', new: true, title: 'Filters',
-          body: '<code>--author=name</code> keeps one person\'s commits. <code>--grep=word</code> searches messages. <code>-S "text"</code>, the pickaxe, finds commits that added or removed that text in the code, even when the message says nothing.',
+          body: 'Narrow down <code>git log</code>: <code>--author=name</code> keeps one person\'s commits. <code>--grep=word</code> searches messages. <code>-S "text"</code>, the pickaxe, finds commits that added or removed that text in the code, even when the message says nothing.',
         },
         {
           id: 'dt2-match', type: 'match',
@@ -209,6 +209,10 @@ export default {
           explain: 'Detective work is usually blame, then show, then a log search for the wider story.',
         },
         {
+          id: 'dt3-parent', type: 'learn', new: true, title: 'Blame further back',
+          body: 'Blame starts from HEAD. If it points at a commit that only reformatted the file, blame again from that commit\'s parent: <code>git blame &lt;id&gt;^ -- file</code>. <code>^</code> means "the parent of"; <code>--</code> marks where the file names begin.',
+        },
+        {
           id: 'dt3-refactor', type: 'choice',
           prompt: 'Blame points at a commit that only re-indented the file. How do you see who wrote the line before that?',
           options: ['Blame again, starting from that commit\'s parent', 'Give up: blame only goes one level', 'git revert the re-indent', 'git log --all'],
@@ -260,7 +264,7 @@ export default {
       exercises: [
         {
           id: 'dt4-bisect', type: 'learn', new: true, title: 'Binary search for bugs',
-          body: '<code>git bisect</code> finds the commit that broke something. Mark one bad commit and one good one; git checks out the middle. Test it, say <code>good</code> or <code>bad</code>, and each answer halves the suspects.',
+          body: '<code>git bisect start &lt;bad&gt; &lt;good&gt;</code> hunts for the commit that broke something. Git checks out the middle; test it, then say <code>git bisect good</code> or <code>git bisect bad</code>. Each answer halves the suspects. <code>git bisect reset</code> takes you back.',
         },
         {
           id: 'dt4-how-many', type: 'choice',
@@ -268,17 +272,6 @@ export default {
           options: ['About 6', 'About 32', '64', 'About 16'],
           answer: 0,
           explain: 'Each test halves the range: 64, 32, 16, 8, 4, 2, 1. That is log2(64) = 6.',
-        },
-        {
-          id: 'dt4-match', type: 'match',
-          prompt: 'Match each bisect command to its meaning.',
-          pairs: [
-            ['git bisect good', 'This commit does not have the bug'],
-            ['git bisect bad', 'This commit has the bug'],
-            ['git bisect run ./run-tests', 'Let a script give every verdict'],
-            ['git bisect reset', 'End the session, back to your branch'],
-          ],
-          explain: 'Get one verdict wrong and bisect confidently names the wrong commit, so test carefully.',
         },
         {
           id: 'dt4-fill', type: 'fill',
@@ -298,6 +291,21 @@ export default {
           options: ['This commit is good', 'This commit is bad', 'Skip this commit', 'Stop bisecting'],
           answer: 0,
           explain: 'Exit 0 is success, so good. 1 to 127 (except 125) is bad, and 125 skips a commit that cannot be tested.',
+        },
+        {
+          id: 'dt4-match', type: 'match',
+          prompt: 'Match each bisect command to its meaning.',
+          pairs: [
+            ['git bisect good', 'This commit does not have the bug'],
+            ['git bisect bad', 'This commit has the bug'],
+            ['git bisect run ./run-tests', 'Let a script give every verdict'],
+            ['git bisect reset', 'End the session, back to your branch'],
+          ],
+          explain: 'Get one verdict wrong and bisect confidently names the wrong commit, so test carefully.',
+        },
+        {
+          id: 'dt4-culprit', type: 'learn', new: true, title: 'Keep the culprit',
+          body: 'When bisect is done, the first bad commit is named <code>refs/bisect/bad</code>. Keep it before you finish: <code>git tag culprit refs/bisect/bad</code>, then <code>git bisect reset</code>, which ends the session and forgets that name.',
         },
         {
           id: 'dt4-order', type: 'order',
@@ -372,11 +380,12 @@ export default {
           explain: '<code>commit:path</code> names a file inside a commit.',
         },
         {
-          id: 'dt5-checkout-path', type: 'learn', new: true, title: 'Restored or staged?',
-          body: '<code>git restore --source=X file</code> writes the old version to your working tree only. The older <code>git checkout X -- file</code> writes it to the index too, so it is already staged.',
+          id: 'dt5-checkout-path', type: 'learn', new: true, title: 'Staged copies, old branches',
+          body: '<code>git restore --source=X file</code> writes the old version to your working tree only. The older <code>git checkout X -- file</code> writes it to the index too, so it is already staged. To branch from the past: <code>git switch -c v1-fix v1.0</code>.',
+          teaches: ['branch from a start point'],
         },
         {
-          id: 'dt5-graph', type: 'graph',
+          id: 'dt5-graph', type: 'graph', needs: ['branch from a start point'],
           prompt: 'You need to fix an old release. Which graph does this give?',
           setup: taggedRelease,
           command: 'git switch -c v1-fix v1.0',
@@ -408,7 +417,7 @@ export default {
           explain: 'checkout with a path staged the old file for you. With restore you would add <code>--staged --worktree</code>, or <code>git add</code> it.',
         },
         {
-          id: 'dt5-type-branch-tag', type: 'type',
+          id: 'dt5-type-branch-tag', type: 'type', needs: ['branch from a start point'],
           prompt: 'Players on <code>v1.0</code> found a bug. Create a branch <code>v1-fix</code> starting at that tag and switch to it.',
           setup: taggedRelease,
           check: (r) => r.branchName() === 'v1-fix' && r.s.branches['v1-fix'] === tagAt(r, 'v1.0'),

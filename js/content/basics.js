@@ -192,6 +192,10 @@ export default {
           explain: 'Plain <code>git diff</code> compares the working tree with the index, and they now match. <code>git diff --staged</code> shows the change.',
         },
         {
+          id: 'ba3-show', type: 'learn', new: true, title: 'Two more views',
+          body: '<code>git diff HEAD</code> shows every change since the last commit, staged or not. <code>git show</code> looks back instead: it prints the last commit, its message and its diff against its parent.',
+        },
+        {
           id: 'ba3-match-diffs', type: 'match',
           prompt: 'Match each command to what it compares.',
           pairs: [
@@ -262,7 +266,7 @@ export default {
       exercises: [
         {
           id: 'ba4-tracked', type: 'learn', new: true, title: 'Tracked or untracked',
-          body: 'A file is <b>tracked</b> once it has been added. <code>git commit -a</code> stages every tracked file that changed, then commits. It never picks up new, untracked files, so scratch files cannot sneak in.',
+          body: 'A file is <b>tracked</b> once it has been added. <code>git commit -a</code> stages every tracked file that changed, then commits. It never picks up new, untracked files. <code>git add .</code> does: it stages everything in the folder.',
         },
         {
           id: 'ba4-commit-a-new', type: 'choice',
@@ -278,9 +282,9 @@ export default {
             ['git add app.js', 'Just that one file'],
             ['git add .', 'Everything here, new files included'],
             ['git commit -a', 'Tracked files that changed (then commits)'],
-            ['git add -p', 'Chosen pieces of a file, hunk by hunk'],
+            ['git add app.js notes.txt', 'Exactly the files you name'],
           ],
-          explain: 'Pick the narrowest tool. <code>git add -p</code> even lets you stage part of a file and leave the rest.',
+          explain: 'Pick the narrowest tool: name the files you mean, and save <code>git add .</code> for when everything belongs in the commit.',
         },
         {
           id: 'ba4-unstage', type: 'learn', new: true, title: 'Changed your mind? Unstage',
@@ -345,10 +349,15 @@ export default {
       exercises: [
         {
           id: 'ba5-gitignore', type: 'learn', new: true, title: '.gitignore',
-          body: 'A <code>.gitignore</code> file lists patterns. Untracked files that match vanish from <code>git status</code> and are skipped by <code>git add .</code>. Commit the .gitignore itself so the whole team shares it.',
+          body: 'A <code>.gitignore</code> file lists patterns. Untracked files that match vanish from <code>git status</code> and are skipped by <code>git add .</code>. Write one with <code>echo "*.log" &gt; .gitignore</code>; <code>&gt;&gt;</code> appends a line instead. Commit it so the team shares it.',
         },
         {
-          id: 'ba5-match-patterns', type: 'match',
+          id: 'ba5-patterns', type: 'learn', new: true, title: 'Pattern basics',
+          body: 'One pattern per line. <code>*</code> matches any name, so <code>*.log</code> catches every log file. A trailing slash, <code>build/</code>, means a whole folder. A leading <code>!</code>, as in <code>!keep.log</code>, makes an exception to an earlier rule.',
+          teaches: ['gitignore patterns'],
+        },
+        {
+          id: 'ba5-match-patterns', type: 'match', needs: ['gitignore patterns'],
           prompt: 'Match each .gitignore line to what it ignores.',
           pairs: [
             ['*.log', 'Every file ending in .log'],

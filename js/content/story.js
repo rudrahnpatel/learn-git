@@ -255,7 +255,7 @@ export default {
           body: 'Rebase replays your commits one by one. <code>Add order form</code> applies cleanly; <code>Link order form in nav</code> touches the line the teammate changed, so git stops. Fix the file, <code>git add</code> it, then <code>git rebase --continue</code>.',
         },
         {
-          id: 'st3-ours', type: 'choice',
+          id: 'st3-ours', type: 'choice', needs: ['rebase sides swap'],
           prompt: 'During this rebase, the conflict shows <code>&lt;&lt;&lt;&lt;&lt;&lt;&lt; HEAD</code> first. Whose version is that?',
           options: ['The teammate\'s (origin/main), which you are replaying onto', 'Yours, from order-form', 'The common ancestor', 'Whichever was committed last'],
           answer: 0,
@@ -397,7 +397,7 @@ export default {
         },
         {
           id: 'st5-tags', type: 'learn', new: true, title: 'Publishing tags',
-          body: 'An annotated tag (<code>git tag -a v1.0 -m "…"</code>) stores who tagged, when and why. Tags do not travel with a normal push: send one with <code>git push origin v1.0</code>, or use <code>git push --follow-tags</code>.',
+          body: 'An annotated tag (<code>git tag -a v1.0 -m "…"</code>) records who tagged and why. Tags do not travel with a normal push: send one with <code>git push origin v1.0</code>, or <code>git push --follow-tags</code>. <code>git tag -n</code> lists tags with their messages.',
         },
         {
           id: 'st5-order', type: 'order',

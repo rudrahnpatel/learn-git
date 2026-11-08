@@ -25,8 +25,13 @@ export default {
       exercises: [
         {
           id: 'br1-label', type: 'learn', new: true, title: 'A branch is a sticky note',
-          body: 'A branch is just a name that points at a commit. Creating one copies no files and takes no time, so make one for every idea: a dark mode, a new recipe page, an experiment.',
+          body: 'A branch is just a name that points at a commit. <code>git branch dark-mode</code> creates one: no files are copied, so make one for every idea. Plain <code>git branch</code> lists your branches.',
           demo: { setup: bakery, run: ['git branch dark-mode'] },
+        },
+        {
+          id: 'br1-switch', type: 'learn', new: true, title: 'Switch branches',
+          body: '<code>git switch dark-mode</code> moves you to a branch that exists. <code>git switch -c dark-mode</code> creates the branch <i>and</i> switches to it, in one step. <code>git switch -</code> jumps back to the branch you were on before.',
+          demo: { setup: bakery, run: ['git switch -c dark-mode'] },
         },
         {
           id: 'br1-graph-switch-c', type: 'graph',
@@ -38,7 +43,7 @@ export default {
         },
         {
           id: 'br1-head', type: 'learn', new: true, title: 'HEAD: where you are',
-          body: '<b>HEAD</b> marks the branch you are on. When you commit, that branch moves forward to the new commit, and every other branch stays exactly where it was.',
+          body: '<b>HEAD</b> marks the branch you are on. When you commit, that branch moves forward to the new commit, and every other branch stays exactly where it was. <code>git log --oneline --graph --all</code> draws them all.',
         },
         {
           id: 'br1-where-main', type: 'choice',
@@ -125,7 +130,7 @@ export default {
         },
         {
           id: 'br2-no-ff', type: 'learn', new: true, title: 'Keep a record: --no-ff',
-          body: '<code>git merge --no-ff login</code> makes a merge commit even when a fast-forward was possible, so the feature shows as a visible bubble. Afterwards <code>git branch -d login</code> removes the label; the commits stay.',
+          body: '<code>git merge --no-ff login</code> makes a merge commit even when a fast-forward was possible, so the feature shows as a bubble. Then <code>git branch -d login</code> removes the label; the commits stay. <code>&amp;&amp;</code> chains two commands: the second runs only if the first worked.',
           demo: { setup: loginReady, run: ['git merge --no-ff login', 'git branch -d login'] },
         },
         {
@@ -188,7 +193,7 @@ export default {
       exercises: [
         {
           id: 'br3-three-way', type: 'learn', new: true, title: 'When both sides moved',
-          body: 'If both branches have new commits, git finds the <b>merge base</b> (the last commit they share), compares each side with it, and combines the changes into a <b>merge commit</b> with two parents.',
+          body: 'If both branches have new commits, git finds the <b>merge base</b> (the last commit they share), compares each side with it, and combines the changes into a <b>merge commit</b> with two parents. <code>git merge --ff-only</code> refuses here: it only merges when it can fast-forward.',
           demo: { setup: diverged, run: ['git merge reviews'] },
         },
         {
@@ -218,7 +223,13 @@ export default {
           explain: 'Git picks fast-forward when it can and a three-way merge when it must. <code>--ff-only</code> and <code>--no-ff</code> let you insist on one.',
         },
         {
-          id: 'br3-up-to-date', type: 'choice',
+          id: 'br3-either-way', type: 'learn', new: true, title: 'Merging works both ways',
+          body: 'Merge always moves the branch you are on, so it works both ways. On <code>reviews</code>, <code>git merge main</code> brings main\'s new commits into your branch, and main stays put. When there is nothing new to bring in, git just says <i>Already up to date.</i>',
+          demo: { setup: (r) => { diverged(r); r.sh('git switch reviews'); }, run: ['git merge main'] },
+          teaches: ['merge main into your branch', 'Already up to date'],
+        },
+        {
+          id: 'br3-up-to-date', type: 'choice', needs: ['Already up to date'],
           prompt: '<code>git merge feature</code> prints <i>"Already up to date."</i> What does that tell you?',
           options: ['Your branch already contains every commit on feature', 'feature has no commits at all', 'The merge failed', 'You need to pull first'],
           answer: 0,
@@ -248,14 +259,19 @@ export default {
           explain: 'They touched different files, so git combined them on its own and recorded a merge commit.',
         },
         {
-          id: 'br3-two-parents', type: 'choice',
+          id: 'br3-parents', type: 'learn', new: true, title: 'Parents: ~ and ^',
+          body: '<code>main~1</code> (or <code>main^</code>) is the commit before main\'s tip, <code>main~2</code> the one before that. A merge commit has two parents: <code>~</code> follows the first, the branch you were on. <code>main^2</code> is the second, the branch you merged in.',
+          teaches: ['first parent'],
+        },
+        {
+          id: 'br3-two-parents', type: 'choice', needs: ['first parent'],
           prompt: 'After the merge, <code>main~1</code> is which commit?',
           options: ['The previous tip of main (its first parent)', 'The tip of reviews', 'The merge base', 'There is no main~1 after a merge'],
           answer: 0,
           explain: '<code>~</code> follows first parents, and the first parent of a merge is the branch you were on. <code>main^2</code> would be reviews.',
         },
         {
-          id: 'br3-type-catch-up', type: 'type',
+          id: 'br3-type-catch-up', type: 'type', needs: ['merge main into your branch'],
           prompt: 'You are on <code>reviews</code>. Bring main\'s latest fix into your branch so you can keep working on top of it.',
           setup: (r) => { diverged(r); r.sh('git switch reviews'); },
           check: (r) => r.branchName() === 'reviews' && isMerge(r, 'reviews') && r.isAncestor(r.s.branches.main, r.s.branches.reviews),
@@ -307,7 +323,7 @@ export default {
         },
         {
           id: 'br4-escape', type: 'learn', new: true, title: 'Shortcuts and the exit',
-          body: 'To take one side whole: <code>git checkout --ours file</code> or <code>--theirs file</code>, then add it. To give up completely: <code>git merge --abort</code> puts everything back the way it was before the merge.',
+          body: 'To take one side whole: <code>git checkout --ours file</code> or <code>--theirs file</code>, then add it. <code>git commit --no-edit</code> finishes with git\'s ready-made message. To give up: <code>git merge --abort</code> puts everything back as it was before the merge.',
         },
         {
           id: 'br4-fill-abort', type: 'fill',
@@ -364,7 +380,7 @@ export default {
             ['git branch -m feature search', 'Rename a branch'],
             ['git branch -D experiment', 'Force-delete an unmerged branch'],
             ['git branch --merged', 'List branches already merged into HEAD'],
-            ['git branch -v', 'Show the latest commit on each branch'],
+            ['git branch', 'List your branches'],
           ],
           explain: 'Housekeeping commands only touch labels. Commits are never changed by renaming or deleting a branch.',
         },

@@ -85,7 +85,7 @@ export default {
         },
         {
           id: 'gh1-remotes', type: 'learn', new: true, title: 'origin and upstream',
-          body: 'When you clone your fork, it becomes <code>origin</code>. Add the original project as a second remote, by convention called <code>upstream</code>: <code>git remote add upstream &lt;url&gt;</code>. Fetch it to see what the maintainers merged.',
+          body: 'When you clone your fork, it becomes <code>origin</code>. Add the original project as a second remote, by convention called <code>upstream</code>: <code>git remote add upstream &lt;url&gt;</code>. Fetch it to see what the maintainers merged. <code>git remote -v</code> lists your remotes.',
           demo: { setup: forkNoUpstream, run: [`git remote add upstream ${UP}`, 'git fetch upstream'] },
         },
         {
@@ -186,7 +186,13 @@ export default {
           explain: 'Status compares with the branch\'s own upstream, here <code>origin/main</code>. It does not look at other remotes, and never at the network.',
         },
         {
-          id: 'gh2-match', type: 'match',
+          id: 'gh2-pull', type: 'learn', new: true, title: 'Fetch and merge in one go',
+          body: '<code>git pull upstream main</code> fetches upstream and merges its main into your branch in one step. Name the branch: your main tracks origin, so for another remote git has to be told which branch to bring in.',
+          demo: { setup: upstreamMoved, run: ['git pull upstream main'] },
+          teaches: ['pull <remote> <branch>'],
+        },
+        {
+          id: 'gh2-match', type: 'match', needs: ['pull <remote> <branch>'],
           prompt: 'Match each command to what it does in a fork.',
           pairs: [
             ['git fetch upstream', 'Download what the maintainers merged'],
@@ -205,7 +211,7 @@ export default {
           explain: '<code>origin/main</code> is your fork, which is behind. The fresh commits are under <code>upstream/main</code>.',
         },
         {
-          id: 'gh2-build', type: 'build',
+          id: 'gh2-build', type: 'build', needs: ['pull <remote> <branch>'],
           prompt: 'Fetch upstream\'s main and merge it into your branch, in one command.',
           tiles: ['git', 'pull', 'upstream', 'main', 'origin', 'push', '--force'],
           answers: [['git', 'pull', 'upstream', 'main']],
@@ -252,7 +258,12 @@ export default {
           explain: 'Uncommitted changes travel with you when you switch, so the commit lands on <code>prices</code>, not main. GitHub now offers "Compare &amp; pull request".',
         },
         {
-          id: 'gh3-match', type: 'match',
+          id: 'gh3-terms', type: 'learn', new: true, title: 'Pull-request words',
+          body: 'A PR asks to merge a <b>compare</b> branch (yours) into a <b>base</b> branch, usually main. Reviewers approve or <b>request changes</b>. Not ready yet? Open it as a <b>draft</b>: open for feedback, but it cannot be merged.',
+          teaches: ['pull request terms'],
+        },
+        {
+          id: 'gh3-match', type: 'match', needs: ['pull request terms'],
           prompt: 'Match each pull-request term to its meaning.',
           pairs: [
             ['Base branch', 'Where the PR will merge, usually main'],
@@ -290,7 +301,12 @@ export default {
           explain: 'The merge happened on GitHub. Your clone hears about it only when you talk to the remote.',
         },
         {
-          id: 'gh3-fill', type: 'fill',
+          id: 'gh3-head', type: 'learn', new: true, title: 'HEAD as a branch name',
+          body: 'In a push, <code>HEAD</code> stands for the branch you are on. <code>git push -u origin HEAD</code> pushes it under the same name and tracks it: handy for long branch names.',
+          teaches: ['push HEAD'],
+        },
+        {
+          id: 'gh3-fill', type: 'fill', needs: ['push HEAD'],
           prompt: 'Push whatever branch you are on, under the same name, and track it.',
           before: 'git push -u origin ', after: '',
           options: ['HEAD', 'main', 'origin', '--all'],
@@ -313,7 +329,8 @@ export default {
       exercises: [
         {
           id: 'gh4-behind', type: 'learn', new: true, title: 'Your PR fell behind',
-          body: 'While your PR waits, other PRs land on main. To catch up, either <b>merge main into your branch</b> (adds a merge commit, rewrites nothing) or <b>rebase onto main</b> (linear, but new commit ids, so you must force-push).',
+          body: 'While your PR waits, other PRs land on main. Catch up by <b>merging main into your branch</b> (nothing rewritten) or <b>rebasing onto main</b> (linear, but new ids, so you must force-push). GitHub\'s <b>Update branch</b> button does the merge for you.',
+          teaches: ['Update branch button'],
           demo: { setup: prBehindFetched, run: ['git rebase origin/main'] },
         },
         {
@@ -332,7 +349,7 @@ export default {
           explain: 'The remote tip is not an ancestor of your new tip. <code>git push --force-with-lease</code> replaces it, checking nobody else pushed meanwhile.',
         },
         {
-          id: 'gh4-match', type: 'match',
+          id: 'gh4-match', type: 'match', needs: ['Update branch button'],
           prompt: 'Match each way of catching up to its effect.',
           pairs: [
             ['git merge origin/main', 'Keeps your commits, adds a merge commit'],
@@ -398,6 +415,10 @@ export default {
           demo: { setup: prMergeCommit, run: ['git pull'] },
         },
         {
+          id: 'gh5-first-parent', type: 'learn', new: true, title: 'One line per PR',
+          body: 'With merge commits, every PR lands on main as one merge. <code>git log --first-parent main</code> follows only main\'s first parents, so it reads one line per merged PR, with each PR\'s own commits folded away.',
+        },
+        {
           id: 'gh5-match', type: 'match',
           prompt: 'Match each merge button to what it does to history.',
           pairs: [
@@ -440,7 +461,7 @@ export default {
         },
         {
           id: 'gh5-cleanup', type: 'learn', new: true, title: 'Clean up after the merge',
-          body: 'Once merged, the branch is done. GitHub can delete <code>origin/prices</code> for you. Locally: switch to main, pull, delete your branch, and <code>git fetch --prune</code> to drop stale <code>origin/*</code> labels.',
+          body: 'Once merged, the branch is done. GitHub can delete <code>origin/prices</code> for you. Locally: switch to main, pull, delete your branch, and drop stale <code>origin/*</code> labels with <code>git fetch --prune</code>. <code>git pull --prune</code> pulls and prunes at once.',
         },
         {
           id: 'gh5-gone', type: 'choice',

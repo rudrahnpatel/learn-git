@@ -54,22 +54,15 @@ export default {
           body: '<code>git restore file</code> throws away unstaged edits, copying the file back from the index. <code>git restore --staged file</code> unstages it instead and keeps your edit. Careful: discarded edits were never committed, so they are gone.',
         },
         {
-          id: 'un1-match', type: 'match',
-          prompt: 'Match each command to what it undoes.',
-          pairs: [
-            ['git restore app.js', 'Throw away unstaged edits to app.js'],
-            ['git restore --staged app.js', 'Unstage app.js, keep the edit'],
-            ['git restore --source=HEAD~2 app.js', 'Bring back app.js from two commits ago'],
-            ['git clean -f', 'Delete untracked files'],
-          ],
-          explain: 'restore works on files and never moves a branch. clean is the only one that deletes files git has never seen.',
-        },
-        {
           id: 'un1-gone', type: 'choice',
           prompt: 'You ran <code>git restore app.js</code> on an edit you never staged or committed. Can git bring it back?',
           options: ['No: it was never saved in git, so it is gone', 'Yes, with git reflog', 'Yes, with git stash pop', 'Yes, with git restore --undo'],
           answer: 0,
           explain: 'The reflog only remembers commits. Unsaved edits only lived in your working tree. Your editor\'s undo is the last hope.',
+        },
+        {
+          id: 'un1-source', type: 'learn', new: true, title: 'Other sources, older spellings',
+          body: '<code>git restore --source=HEAD~2 file</code> copies the file from any commit instead of the index: here, two commits back. Old tutorials write <code>git checkout -- file</code> for a plain <code>git restore file</code>; <code>checkout</code> once did both branches and files.',
         },
         {
           id: 'un1-fill-source', type: 'fill',
@@ -82,6 +75,17 @@ export default {
         {
           id: 'un1-clean', type: 'learn', new: true, title: 'git clean',
           body: '<code>git clean</code> deletes untracked files (ignored ones are left alone). Because that cannot be undone, it refuses to run without <code>-f</code>. Preview first with <code>git clean -n</code>.',
+        },
+        {
+          id: 'un1-match', type: 'match',
+          prompt: 'Match each command to what it undoes.',
+          pairs: [
+            ['git restore app.js', 'Throw away unstaged edits to app.js'],
+            ['git restore --staged app.js', 'Unstage app.js, keep the edit'],
+            ['git restore --source=HEAD~2 app.js', 'Bring back app.js from two commits ago'],
+            ['git clean -f', 'Delete untracked files'],
+          ],
+          explain: 'restore works on files and never moves a branch. clean is the only one that deletes files git has never seen.',
         },
         {
           id: 'un1-build-unstage', type: 'build',
@@ -139,7 +143,7 @@ export default {
             ['--soft', 'Branch moved; changes still staged'],
             ['--mixed', 'Branch moved; changes in files, unstaged'],
             ['--hard', 'Branch moved; changes discarded'],
-            ['ORIG_HEAD', 'Where HEAD was before the reset'],
+            ['No mode given', 'Same as --mixed, the default'],
           ],
           explain: 'All three move the branch the same way. They only differ in how much of the index and working tree they also reset.',
         },
@@ -168,7 +172,8 @@ export default {
         },
         {
           id: 'un2-hard', type: 'learn', new: true, title: '--hard is the sharp one',
-          body: '<code>git reset --hard</code> also overwrites your index and working tree. Uncommitted edits are lost for good. Committed work is still recoverable for a while through the reflog.',
+          body: '<code>git reset --hard</code> also overwrites your index and working tree. Uncommitted edits are lost for good. Committed work is still recoverable for a while through the reflog. With no commit named, reset uses HEAD: plain <code>git reset</code> just unstages everything.',
+          teaches: ['reset defaults to HEAD'],
         },
         {
           id: 'un2-hard-dirty', type: 'choice',
@@ -193,7 +198,7 @@ export default {
           explain: 'reset --soft plus commit is a squash without an interactive rebase. Both originals fade out of the graph.',
         },
         {
-          id: 'un2-type-unstage-all', type: 'type',
+          id: 'un2-type-unstage-all', type: 'type', needs: ['reset defaults to HEAD'],
           prompt: 'You staged everything with <code>git add .</code> too early. Unstage it all, keeping every edit.',
           setup: (r) => { r.setupCommit('Initial commit', { 'a.js': 'a()', 'b.js': 'b()' }); r.setupFiles({ 'a.js': 'a(1)', 'b.js': 'b(2)' }); r.sh('git add .'); },
           check: (r) => r.stagedChanges().length === 0 && r.s.work['a.js'] === 'a(1)\n' && r.s.work['b.js'] === 'b(2)\n',
@@ -212,7 +217,12 @@ export default {
           demo: { setup: prices, run: ['git revert --no-edit HEAD~1'] },
         },
         {
-          id: 'un3-graph-revert', type: 'graph',
+          id: 'un3-shared', type: 'learn', new: true, title: 'Pushed means shared',
+          body: 'Teams share commits through a remote copy of the repo, <code>origin</code>. <code>git push</code> uploads your new commits there; <code>origin/main</code> marks where its main is. Once a commit is pushed, teammates build on it: undo it with a new commit, never by moving main back.',
+          teaches: ['origin/main'],
+        },
+        {
+          id: 'un3-graph-revert', type: 'graph', needs: ['origin/main'],
           prompt: '"Raise price to 99" (<code>HEAD~1</code>) was a mistake, and main is already pushed. Which graph?',
           setup: prices,
           command: 'git revert --no-edit HEAD~1',
@@ -220,22 +230,11 @@ export default {
           explain: 'A new commit on top, and nothing removed. The resets drag main back behind origin/main, losing the FAQ on the way, and would need a force-push.',
         },
         {
-          id: 'un3-which-safe', type: 'choice',
+          id: 'un3-which-safe', type: 'choice', needs: ['origin/main'],
           prompt: 'The bad commit is on <code>origin/main</code> and teammates have pulled it. Which undo is safe?',
           options: ['git revert', 'git reset --hard', 'git commit --amend', 'git rebase -i'],
           answer: 0,
           explain: 'The other three rewrite history that others already have. Revert just adds a commit everyone can pull normally.',
-        },
-        {
-          id: 'un3-match', type: 'match',
-          prompt: 'Match each undo to when you would use it.',
-          pairs: [
-            ['git revert <commit>', 'Undo a pushed commit with a new commit'],
-            ['git reset --hard HEAD~1', 'Drop an unpushed commit entirely'],
-            ['git revert -m 1 <merge>', 'Undo a whole merge, keeping parent 1'],
-            ['git restore <file>', 'Undo uncommitted edits'],
-          ],
-          explain: 'Ask two questions: is it committed, and has anyone else got it?',
         },
         {
           id: 'un3-merge', type: 'learn', new: true, title: 'Reverting a merge',
@@ -250,7 +249,18 @@ export default {
           explain: '<code>-m</code> (mainline) says which parent to keep. Without it, git refuses to revert a merge.',
         },
         {
-          id: 'un3-order', type: 'order',
+          id: 'un3-match', type: 'match',
+          prompt: 'Match each undo to when you would use it.',
+          pairs: [
+            ['git revert <commit>', 'Undo a pushed commit with a new commit'],
+            ['git reset --hard HEAD~1', 'Drop an unpushed commit entirely'],
+            ['git revert -m 1 <merge>', 'Undo a whole merge, keeping parent 1'],
+            ['git restore <file>', 'Undo uncommitted edits'],
+          ],
+          explain: 'Ask two questions: is it committed, and has anyone else got it?',
+        },
+        {
+          id: 'un3-order', type: 'order', needs: ['origin/main'],
           prompt: 'A bad commit is already on origin/main. Undo it the safe way.',
           steps: ['git log --oneline (find the bad commit)', 'git revert <id>', 'git push'],
           explain: 'Find it, revert it, share the revert. Nobody has to force anything.',
@@ -304,6 +314,11 @@ export default {
           command: 'git reset --hard HEAD@{1}',
           distractors: [['git reset --hard HEAD~1'], ['git reset --hard HEAD@{2}']],
           explain: 'HEAD@{1} is where you were right before the bad reset, so main jumps back to "Add level 2". HEAD~1 walks further into the past.',
+        },
+        {
+          id: 'un4-orig-head', type: 'learn', new: true, title: 'ORIG_HEAD: one step back',
+          body: 'Reset, merge and rebase save where HEAD was before they moved it, as <code>ORIG_HEAD</code>. So <code>git reset --hard ORIG_HEAD</code> undoes the last of them in one step, no reflog reading needed. The next reset, merge or rebase overwrites it.',
+          demo: { setup: resetTooFar, run: ['git reset --hard ORIG_HEAD'] },
         },
         {
           id: 'un4-fill-orig', type: 'fill',
@@ -376,13 +391,13 @@ export default {
           demo: { setup: wrongBranch, run: ['git branch newsletter', 'git reset --hard origin/main'] },
         },
         {
-          id: 'un5-order', type: 'order',
+          id: 'un5-order', type: 'order', needs: ['origin/main'],
           prompt: 'Two commits on main belong on <code>newsletter</code>. You are on main.',
           steps: ['git branch newsletter', 'git reset --hard origin/main', 'git switch newsletter'],
           explain: 'Label first, so the commits are kept. Then main can safely move back. Reversing the first two would orphan the work.',
         },
         {
-          id: 'un5-graph', type: 'graph',
+          id: 'un5-graph', type: 'graph', needs: ['origin/main'],
           prompt: 'You are on main, two commits ahead of origin/main. Which graph?',
           setup: wrongBranch,
           command: 'git branch newsletter && git reset --hard origin/main',
@@ -416,7 +431,7 @@ export default {
           explain: 'Most rescues are just moving labels around, and the reflog has your back if you move the wrong one.',
         },
         {
-          id: 'un5-first-parent', type: 'choice',
+          id: 'un5-first-parent', type: 'choice', needs: ['first parent'],
           prompt: 'Right after a merge on main, <code>git reset --hard HEAD~1</code> goes to which commit?',
           options: ['main\'s tip from before the merge (first parent)', 'The merged branch\'s tip', 'The merge base', 'It fails on merge commits'],
           answer: 0,
