@@ -112,8 +112,8 @@ export default {
         },
         {
           id: 'rw1-pushed', type: 'choice',
-          prompt: 'Why think twice before amending a commit you already pushed?',
-          options: ['Amend makes a new commit, so your branch and the remote disagree and you would need a force-push', 'Amend deletes the remote branch', 'Pushed commits cannot be amended at all', 'Amend pushes automatically'],
+          prompt: 'Why think twice before amending a commit your teammates already have?',
+          options: ['Amend makes a new commit, so your copy and theirs no longer match', 'Amend deletes their copy of the branch', 'Shared commits cannot be amended at all', 'Amend sends the change to them automatically'],
           answer: 0,
           explain: 'Teammates may already have the old commit. Rewriting it means a force-push, and their copies diverge from yours.',
         },
@@ -148,7 +148,8 @@ export default {
       exercises: [
         {
           id: 'rw2-rebase', type: 'learn', new: true, title: 'Replay on top',
-          body: '<code>git rebase main</code> takes the commits on your branch that main lacks and replays them, one by one, on top of main\'s tip. History becomes a straight line, as if you had started today.',
+          body: '<code>git rebase main</code> takes the commits on your branch that main lacks and replays them, one by one, on top of main\'s tip. History becomes a straight line, as if you had started today. <code>git rebase main feature</code> switches to feature first.',
+          teaches: ['rebase <base> <branch>'],
           demo: { setup: shopFeature, run: ['git rebase main'] },
         },
         {
@@ -167,19 +168,9 @@ export default {
           explain: 'A commit\'s id comes from its content, message and parent. New parent, new commit. The old ones still exist until they are cleaned up.',
         },
         {
-          id: 'rw2-match', type: 'match',
-          prompt: 'Merge or rebase? Match each to its description.',
-          pairs: [
-            ['git merge main', 'Keeps history as it happened, adds a merge commit'],
-            ['git rebase main', 'Rewrites your commits onto a new base'],
-            ['The golden rule', 'Do not rebase commits others already have'],
-            ['git rebase --abort', 'Go back to before the rebase started'],
-          ],
-          explain: 'Both integrate the same changes. Merge preserves history; rebase rewrites it into a straight line.',
-        },
-        {
           id: 'rw2-conflicts', type: 'learn', new: true, title: 'Conflicts mid-rebase',
-          body: 'A rebase replays commits one at a time, so it can stop on any of them. Fix the file, <code>git add</code> it, then <code>git rebase --continue</code> (not commit). <code>--skip</code> drops that commit; <code>--abort</code> undoes everything.',
+          body: 'A rebase can stop on any commit it replays. Fix the file, <code>git add</code> it, then <code>git rebase --continue</code>. <code>--skip</code> drops that commit; <code>--abort</code> undoes everything. Mid-rebase, HEAD is the base you replay onto, so ours and theirs swap.',
+          teaches: ['rebase sides swap'],
         },
         {
           id: 'rw2-order-conflict', type: 'order',
@@ -196,7 +187,18 @@ export default {
           explain: '<code>--continue</code> records the fixed commit and moves on to the next one in the list.',
         },
         {
-          id: 'rw2-build-two-arg', type: 'build',
+          id: 'rw2-match', type: 'match',
+          prompt: 'Merge or rebase? Match each to its description.',
+          pairs: [
+            ['git merge main', 'Keeps history as it happened, adds a merge commit'],
+            ['git rebase main', 'Rewrites your commits onto a new base'],
+            ['git rebase --continue', 'Carry on after fixing a conflict'],
+            ['git rebase --abort', 'Go back to before the rebase started'],
+          ],
+          explain: 'Both integrate the same changes. Merge preserves history; rebase rewrites it into a straight line.',
+        },
+        {
+          id: 'rw2-build-two-arg', type: 'build', needs: ['rebase <base> <branch>'],
           prompt: 'You are on <code>main</code>. Rebase <code>feature</code> onto main in one command.',
           tiles: ['git', 'rebase', 'main', 'feature', 'merge', 'switch'],
           answers: [['git', 'rebase', 'main', 'feature']],
@@ -323,6 +325,11 @@ export default {
           options: ['No: same change, different parent, so a new id', 'Yes, it is the same commit', 'Yes, unless there was a conflict', 'It has no id until you push'],
           answer: 0,
           explain: 'It is a copy. Git can often spot the duplicate later (for example, rebase skips patches that are already upstream).',
+        },
+        {
+          id: 'rw4-ranges', type: 'learn', new: true, title: 'Ranges and conflicts',
+          body: '<code>git cherry-pick A..B</code> copies every commit after A, up to B, oldest first. <code>-x</code> notes the original id in the message. A conflict stops it like a rebase: fix, <code>git add</code>, then <code>git cherry-pick --continue</code>, or <code>--abort</code> to give up.',
+          demo: { setup: releaseDev, run: ['git cherry-pick dev~2..dev'] },
         },
         {
           id: 'rw4-match', type: 'match',

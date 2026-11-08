@@ -88,13 +88,18 @@ export default {
           explain: 'Fetch downloads the commits and moves origin/main, but never touches your main. Pull would also move main.',
         },
         {
+          id: 'rm1-pull', type: 'learn', new: true, title: 'pull = fetch + merge',
+          body: '<code>git pull</code> is <code>git fetch</code> plus a merge of <code>origin/main</code> into the branch you are on. With no local commits it is a fast-forward: main just slides up. <code>git push</code> goes the other way and uploads your commits.',
+          demo: { setup: teamAhead, run: ['git pull'] },
+        },
+        {
           id: 'rm1-match', type: 'match',
           prompt: 'Match each command to what it does.',
           pairs: [
             ['git fetch', 'Download commits, move origin/* only'],
             ['git pull', 'Fetch, then integrate into your branch'],
             ['git push', 'Upload your branch to the remote'],
-            ['git remote -v', 'List remotes and their URLs'],
+            ['origin/main', 'Your last-known picture of the remote main'],
           ],
           explain: 'Fetch is always safe: it only updates remote-tracking branches. Pull and push change things.',
         },
@@ -176,11 +181,17 @@ export default {
           explain: '<code>-u</code> is short for <code>--set-upstream</code>. <code>-f</code> would force-push, which is never needed for a new branch.',
         },
         {
+          id: 'rm2-delete', type: 'learn', new: true, title: 'Delete a remote branch',
+          body: 'A merged branch lives on in the remote too. <code>git push origin --delete old-feature</code> removes it there. Your local label is separate: <code>git branch -d old-feature</code> removes that one.',
+          demo: { setup: leftoverRemoteBranch, run: ['git push origin --delete old-feature'] },
+        },
+        {
           id: 'rm2-match', type: 'match',
           prompt: 'Match each push option to what it does.',
+          needs: ['git push -u', 'git push --delete', 'git push --tags'],
           pairs: [
             ['-u', 'Remember the upstream branch'],
-            ['--force-with-lease', 'Overwrite only if the remote did not move'],
+            ['No option', 'Push the branch to its upstream'],
             ['--delete', 'Remove a branch from the remote'],
             ['--tags', 'Push all your tags'],
           ],
@@ -240,6 +251,10 @@ export default {
           options: ['Both sides have new commits, and git wants you to pick merge or rebase', 'The remote is offline', 'You have uncommitted changes', 'Your branch has no upstream'],
           answer: 0,
           explain: 'Recent git versions stop and ask instead of silently merging. <code>--rebase</code>, <code>--no-rebase</code> or a <code>pull.rebase</code> setting answers it.',
+        },
+        {
+          id: 'rm3-config', type: 'learn', new: true, title: 'Pick a default once',
+          body: '<code>git config pull.rebase true</code> makes every pull rebase; <code>false</code> makes it merge. <code>git pull --ff-only</code> is the cautious third way: it only fast-forwards, and stops if both sides moved.',
         },
         {
           id: 'rm3-match', type: 'match',
@@ -316,7 +331,7 @@ export default {
           explain: 'The lease checks that the remote is where you last saw it. It is not, so git refuses. <code>--force</code> would have deleted their work.',
         },
         {
-          id: 'rm4-match', type: 'match',
+          id: 'rm4-match', type: 'match', needs: ['git push --force', 'git push --force-with-lease'],
           prompt: 'Match each phrase to its meaning.',
           pairs: [
             ['--force', 'Overwrite the remote no matter what'],
@@ -380,6 +395,10 @@ export default {
           command: 'git switch reviews',
           distractors: [['git switch --detach origin/reviews'], ['git branch reviews']],
           explain: 'A new local reviews, on the same commit as origin/reviews, with HEAD on it. <code>git branch reviews</code> would create it at main instead.',
+        },
+        {
+          id: 'rm5-prune', type: 'learn', new: true, title: 'List and prune',
+          body: '<code>git branch -r</code> lists remote-tracking branches; <code>git branch -vv</code> shows the upstream each local branch tracks. A branch deleted on the remote lingers here as a stale <code>origin/</code> label until <code>git fetch --prune</code> removes it.',
         },
         {
           id: 'rm5-match', type: 'match',

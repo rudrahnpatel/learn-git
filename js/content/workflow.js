@@ -38,7 +38,7 @@ export default {
       exercises: [
         {
           id: 'wf1-stash', type: 'learn', new: true, title: 'git stash',
-          body: 'Halfway through a feature and an urgent fix comes in? <code>git stash</code> shelves your uncommitted changes and leaves a clean tree. Later, <code>git stash pop</code> puts them back.',
+          body: 'Urgent fix, half-done feature? <code>git stash</code> shelves your uncommitted changes and leaves a clean tree. <code>git stash pop</code> puts them back and removes the entry; <code>git stash apply</code> puts them back but keeps it. <code>git stash list</code> shows the shelf.',
         },
         {
           id: 'wf1-refused', type: 'choice',
@@ -74,7 +74,7 @@ export default {
         },
         {
           id: 'wf1-untracked', type: 'learn', new: true, title: 'New files need -u',
-          body: 'Plain <code>git stash</code> only shelves tracked files; a brand-new file stays behind in your working tree. <code>git stash -u</code> (<code>--include-untracked</code>) takes untracked files along too.',
+          body: 'Plain <code>git stash</code> only shelves tracked files; a brand-new file stays behind in your working tree. <code>git stash -u</code> (<code>--include-untracked</code>) takes untracked files along too. To find a stash later, label it: <code>git stash push -m "emoji picker"</code>.',
         },
         {
           id: 'wf1-build', type: 'build',
@@ -122,7 +122,7 @@ export default {
       exercises: [
         {
           id: 'wf2-stack', type: 'learn', new: true, title: 'A stack of stashes',
-          body: 'Stashes pile up like plates. The newest is <code>stash@{0}</code>, the one before is <code>stash@{1}</code>, and so on. <code>pop</code>, <code>apply</code>, <code>show</code> and <code>drop</code> all take one of these names.',
+          body: 'Stashes pile up like plates. The newest is <code>stash@{0}</code>, the one before is <code>stash@{1}</code>. Every stash command takes these names: <code>git stash show -p stash@{1}</code> shows what is inside, <code>git stash drop stash@{1}</code> deletes it. <code>git stash clear</code> deletes them all.',
         },
         {
           id: 'wf2-newest', type: 'choice',
@@ -211,6 +211,18 @@ export default {
           explain: 'A tag label on HEAD. A branch called v1.0 would look similar, but it would move as soon as you committed on it.',
         },
         {
+          id: 'wf3-vs-branch', type: 'choice',
+          prompt: 'You tag a commit <code>v1.0</code>, then make three more commits. Where is v1.0?',
+          options: ['Still on the commit you tagged', 'On the newest commit', 'Deleted', 'Three commits ahead'],
+          answer: 0,
+          explain: 'That is the whole point of a tag: v1.0 means the same code forever.',
+        },
+        {
+          id: 'wf3-share', type: 'learn', new: true, title: 'Sharing and managing tags',
+          body: 'A plain <code>git push</code> leaves tags behind. Send one with <code>git push origin v1.0</code>, or all of them with <code>git push origin --tags</code>. Tag an older commit by naming it: <code>git tag v0.9 HEAD~1</code>. <code>git tag -d v0.9</code> deletes a local tag.',
+          demo: { setup: (r) => { portfolio(r); r.setupRemote(); }, run: ['git tag v1.0', 'git push origin v1.0'] },
+        },
+        {
           id: 'wf3-match', type: 'match',
           prompt: 'Match each command to what it does.',
           pairs: [
@@ -220,13 +232,6 @@ export default {
             ['git tag -d v1.0', 'Delete a local tag'],
           ],
           explain: 'Use annotated tags for releases: <code>git show v1.0</code> then tells you who tagged it, when and why.',
-        },
-        {
-          id: 'wf3-vs-branch', type: 'choice',
-          prompt: 'You tag a commit <code>v1.0</code>, then make three more commits. Where is v1.0?',
-          options: ['Still on the commit you tagged', 'On the newest commit', 'Deleted', 'Three commits ahead'],
-          answer: 0,
-          explain: 'That is the whole point of a tag: v1.0 means the same code forever.',
         },
         {
           id: 'wf3-fill', type: 'fill',
