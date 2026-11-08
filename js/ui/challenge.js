@@ -46,6 +46,14 @@ export function renderChallenge(root, level, opts = {}) {
   repo = makeRepo();
 
   /* ---- header */
+  // phones: the goal sheet holds the hints, so the header gets its own Hint button: it opens the sheet, shows the next
+  // hint (same counter and star rule as hintBtn) and scrolls it into view. Before, phone players had to discover that
+  // the goal line's "+" unfolds the hints.
+  const phoneHint = keepFocus(h('button', { class: 'btn small ghost phone-hint', type: 'button', onclick: () => {
+    if (hintsShown < level.hints.length) { hintsShown++; sfx.tap(); drawHints(); announce(`Hint ${hintsShown}: ${h('div', { html: level.hints[hintsShown - 1] }).textContent}`); }
+    peek(true);
+    requestAnimationFrame(() => (hintList.lastElementChild || hintCard).scrollIntoView({ block: 'nearest' }));
+  } }));
   const movesPill = h('span', { class: 'tag-pill mono moves-pill' });
   const back = h('button', { class: 'icon-btn round quit', 'aria-label': 'Back to the path', html: ICON.close(), onclick: () => leave() });
   const head = h('header', { class: 'ch-top' }, back,
@@ -53,6 +61,7 @@ export function renderChallenge(root, level, opts = {}) {
       h('span', { class: 'mono tiny' }, (level.arcade ? 'PRACTICE' : opts.unitTitle ? `${opts.unitTitle.toUpperCase()} · CHALLENGE` : 'CHALLENGE') + (level.sandbox ? '' : ` · ${KINDS[level.kind]?.label.toUpperCase() || ''}`)),
       h('h1', {}, level.title)),
     level.sandbox ? null : movesPill,
+    level.sandbox || !level.hints?.length ? null : phoneHint,
     level.sandbox ? h('button', { class: 'btn small ghost', type: 'button', onclick: () => restart() }, 'Reset sandbox')
       : h('button', { class: 'btn small ghost', type: 'button', 'aria-label': 'Restart', onclick: () => restart() }, '↻', h('span', { class: 'wide-l' }, ' Restart')),
     level.arcade && !level.sandbox ? h('button', { class: 'btn small dark', type: 'button', onclick: () => opts.onAgain?.() }, 'New history') : null);
@@ -65,6 +74,9 @@ export function renderChallenge(root, level, opts = {}) {
     hintList.replaceChildren(...level.hints.slice(0, hintsShown).map((t) => h('li', { html: t })));
     hintBtn.textContent = hintsShown >= level.hints.length ? 'No more hints' : hintsShown ? `Another hint (${hintsShown}/${level.hints.length})` : 'Need a hint?';
     hintBtn.disabled = hintsShown >= level.hints.length;
+    const left = level.hints.length - hintsShown;
+    phoneHint.textContent = left ? (hintsShown ? `Hint ${hintsShown + 1}/${level.hints.length}` : 'Hint') : 'Hints';
+    phoneHint.setAttribute('aria-label', left ? `Show hint ${hintsShown + 1} of ${level.hints.length}` : 'Show the hints');
   };
   if (level.sandbox) hintsShown = level.hints.length;
   let targetBox = null;

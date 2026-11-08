@@ -761,6 +761,7 @@ textarea.cf-edit:focus-visible { outline: 2px solid var(--iris); outline-offset:
 .goal-card .goal-tag { background: var(--yellow); }
 .goal-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .phone-only { display: none; }
+.ch-top .phone-hint { display: none; } /* phones only: desktop shows the hints under the goal */
 .goal-text { font-size: 22px; line-height: 1.25; letter-spacing: -0.01em; }
 .checklist { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; width: 100%; }
 .checklist li { display: flex; gap: 10px; align-items: flex-start; font-size: 16px; color: var(--mute); }
@@ -840,6 +841,7 @@ textarea.cf-edit:focus-visible { outline: 2px solid var(--iris); outline-offset:
   .ch-title h1 { font-size: 20px; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ch-top .btn.small { flex: none; padding: 6px 12px; font-size: 14px; min-height: 0; }
   .ch-top .moves-pill, .ch-top .wide-l { display: none; }
+  .ch-top .phone-hint { display: inline-flex; margin-left: auto; }
   .goal-card .phone-only { display: inline-flex; }
   .ch-grid { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: stretch; gap: 8px; position: relative; }
   .ch-left { display: none; }
