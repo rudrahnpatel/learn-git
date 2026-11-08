@@ -96,3 +96,135 @@ Locally: `python3 -m http.server 8801` from the repo root, then open http://loca
   caller's JWT email is in `admins` and is confirmed on their account.
 - `progress.rev` must go up by exactly one on every update (a trigger checks it). Two devices
   syncing at once can't overwrite each other: the loser re-reads, merges and tries again.
+
+## Push reminders (optional)
+
+Signed-in players get a **Daily reminder** switch and an hour picker in Profile → Account. When it's
+on, that device gets one push notification at the chosen hour (its own time zone) on days they
+haven't practised yet, even with the app closed. Guests keep the old local-only reminder pill.
+
+How it fits together: the browser stores its Web Push subscription in `push_subscriptions` (RLS:
+own rows only). Every hour `pg_cron` calls the `send-reminders` Edge Function, which reads the
+subscriptions and the players' `progress` with the service role, picks the ones that are due and
+sends through the browser's push service. Dead subscriptions (404/410) are deleted. Nothing below
+has been run against the live project yet; do the steps in order.
+
+Files: [`migrations/push_reminders.sql`](migrations/push_reminders.sql) (also at the end of
+`schema.sql`), [`migrations/push_reminders_cron.sql`](migrations/push_reminders_cron.sql),
+[`functions/send-reminders/index.ts`](functions/send-reminders/index.ts),
+[`functions/_shared/reminders.js`](functions/_shared/reminders.js) (the due-user logic, unit-tested in
+`tests/reminders.test.mjs`). The migration files are run by hand in the SQL editor; they don't use the
+CLI's `<timestamp>_name.sql` naming, so `supabase db push` skips them on purpose.
+
+### 1. Generate the VAPID keys (once, on your machine)
+
+```sh
+npx web-push@3.6.7 generate-vapid-keys        # or: deno run -A npm:web-push@3.6.7 generate-vapid-keys
+```
+
+It prints a **public key** (starts with `B`, ~87 characters) and a **private key** (~43 characters).
+The public key goes in the app; the private key only ever goes into Supabase secrets (step 4).
+Never commit the private key. If it leaks, generate a new pair: every device has to turn
+reminders on again, because subscriptions are tied to the public key.
+
+### 2. Create the table
+
+SQL Editor → New query → paste [`migrations/push_reminders.sql`](migrations/push_reminders.sql) → Run
+(or re-run the whole `schema.sql`, which now ends with the same section). Safe to run again.
+
+### 3. Install and link the Supabase CLI
+
+```sh
+npm i -g supabase            # or: brew install supabase/tap/supabase
+supabase login
+supabase link --project-ref dgalcekeajfmxwytooig      # from the repo root
+```
+
+If the CLI complains that there's no `supabase/config.toml`, run `supabase init` once (it only adds
+that file; the functions and SQL here are unaffected).
+
+### 4. Set the function's secrets
+
+```sh
+openssl rand -hex 32            # the REMINDER_SECRET: keep it handy, step 6 stores it in Vault too
+supabase secrets set \
+  VAPID_PUBLIC_KEY='<public key from step 1>' \
+  VAPID_PRIVATE_KEY='<private key from step 1>' \
+  VAPID_SUBJECT='mailto:<your email>' \
+  REMINDER_SECRET='<the hex string from openssl>'
+supabase secrets list           # names only; values are shown as hashes
+```
+
+`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are provided to functions automatically.
+
+### 5. Deploy the function
+
+```sh
+supabase functions deploy send-reminders --no-verify-jwt
+```
+
+`--no-verify-jwt` because the cron job authenticates with the `x-reminder-secret` header, not a user
+JWT. The function refuses every request without that secret (or the service-role key as a Bearer
+token), and only accepts POST. Try it without sending anything:
+
+```sh
+curl -s -X POST 'https://dgalcekeajfmxwytooig.supabase.co/functions/v1/send-reminders' \
+  -H 'x-reminder-secret: <REMINDER_SECRET>' -H 'content-type: application/json' \
+  -d '{"dryRun": true}'
+# -> {"dryRun":true,"enabled":0,"candidates":0,"due":[]}  (lists who would get one this hour)
+```
+
+### 6. Schedule it (pg_cron + pg_net)
+
+1. **Database → Extensions**: enable **pg_cron** and **pg_net** (the SQL in the next step also tries
+   `create extension if not exists`, which works when you're the project owner).
+2. SQL Editor, store the two values the job needs in Vault (once; nothing secret goes in a file):
+
+   ```sql
+   select vault.create_secret('https://dgalcekeajfmxwytooig.supabase.co', 'learn_git_project_url');
+   select vault.create_secret('<REMINDER_SECRET from step 4>', 'learn_git_reminder_secret');
+   ```
+
+   To change one later: `select vault.update_secret((select id from vault.secrets where name = 'learn_git_reminder_secret'), '<new value>');`
+3. SQL Editor → paste [`migrations/push_reminders_cron.sql`](migrations/push_reminders_cron.sql) → Run.
+   It schedules `learn-git-send-reminders` at minute 0 of every hour (UTC).
+
+**Half-hour time zones:** a device is due when its local hour equals its reminder hour, so in India
+(+5:30) the :00 UTC run is :30 local and a 19:00 reminder arrives at 19:30. For on-the-hour
+reminders there, change the schedule to `'0,30 * * * *'` in the cron file and run it again (the
+function sends at most once per device per local day, so extra runs are harmless).
+
+Check it: `select * from cron.job_run_details order by start_time desc limit 5;` and
+`select status_code, content from net._http_response order by created desc limit 5;`.
+Stop it: `select cron.unschedule('learn-git-send-reminders');`.
+
+### 7. Put the public key in the app
+
+Edit `js/cloud/config.js`:
+
+```js
+export const VAPID_PUBLIC_KEY = '<public key from step 1>';
+```
+
+Then `node tools/precache.mjs` (config.js is a shipped file) and deploy. Until this is filled in, the
+Daily reminder switch stays hidden and nothing else changes.
+
+### 8. Check it
+
+1. Open `/app` signed in → Profile → Account → **Daily reminder**. Turn it on and allow
+   notifications. A row appears in **Table Editor → push_subscriptions** with your time zone.
+2. Set the hour to the current hour, don't play today, and run the `curl` from step 5 without
+   `dryRun` (or wait for the top of the hour). The notification appears; tapping it opens the app.
+3. Run it again: nothing is sent (`last_sent` is today). Play a lesson tomorrow before the hour: nothing
+   is sent that day.
+
+Platform notes: Chrome, Edge, Firefox and Safari on macOS work in a normal tab. **iPhone/iPad only
+deliver push to the installed app** (Share → Add to Home Screen, iOS/iPadOS 16.4 or later); the
+switch explains that in Safari. If notifications are blocked for the site, the switch says how to
+allow them. Signing out or deleting the account removes this device's subscription.
+
+How it is secured: the browser can only read, add, change (keys, time zone, hour, on/off) and delete
+its own account's rows; `last_sent` and the owner can't be changed from the browser, an unknown time
+zone is refused, and an account can have at most 10 devices. Only the Edge Function (service role)
+reads every row and the `progress` table, and the function only runs for the cron secret or the
+service-role key. The VAPID private key lives only in the function's secrets.

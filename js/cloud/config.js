@@ -10,3 +10,8 @@ export const SUPABASE_JS = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2
 // Where the auth session lives in localStorage (also how the app knows, without the SDK, that
 // someone signed in on this browser).
 export const AUTH_STORAGE_KEY = 'learn-git:auth';
+
+// Web Push reminders (setup: supabase/README.md, "Push reminders"). The PUBLIC half of the VAPID key
+// pair (base64url, starts with "B"). Public by design; the private half lives only in the Edge
+// Function's secrets. Empty = the "Daily reminder" setting stays hidden for signed-in players.
+export const VAPID_PUBLIC_KEY = '';

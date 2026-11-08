@@ -17,3 +17,34 @@ body:not([data-screen="home"]):not([data-screen="practice"]) #pwa-corner { displ
 @media (max-width: 760px) { .pwa-toast { bottom: calc(132px + env(safe-area-inset-bottom)); } }
 @keyframes pwa-in { from { opacity: 0; transform: translate(-50%, 16px); } }
 @media (prefers-reduced-motion: reduce) { .pwa-toast { animation: none; } }
+
+/* Daily reminder (js/ui/reminder.js): the push-reminder block inside the profile's account card.
+   Tokens only, so light and dark both work. The switch is a real <button role=switch>. */
+.rem { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--frost, #e1edff); }
+.rem-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.rem-text { min-width: 0; }
+.rem-title { font-size: 20px; line-height: 1.2; font-weight: 400; margin: 0 0 4px; }
+.rem-text p { margin: 0; max-width: 520px; }
+.rem-switch { flex: none; position: relative; width: 56px; height: 32px; margin-top: 2px; border: 0; border-radius: 32px; padding: 0; cursor: pointer; background: var(--paper, #fff); box-shadow: inset 0 0 0 2px var(--mute, #5b6378); transition: background .15s ease; -webkit-tap-highlight-color: transparent; }
+.rem-switch[aria-checked="true"] { background: var(--iris, #2727e6); box-shadow: none; }
+.rem-knob { position: absolute; top: 6px; left: 6px; width: 20px; height: 20px; border-radius: 50%; background: var(--mute, #5b6378); transition: transform .15s ease, background .15s ease; }
+.rem-switch[aria-checked="true"] .rem-knob { transform: translateX(24px); background: var(--on-iris, #fff); }
+.rem-switch:focus-visible, .rem-select:focus-visible { outline: 2px solid var(--iris, #2727e6); outline-offset: 2px; }
+.rem-switch:disabled { cursor: default; opacity: .55; }
+.rem-time { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px; }
+.rem-time label { font-size: 16px; }
+.rem-select { font: 15px/1.2 var(--mono, monospace); letter-spacing: 0; color: var(--ink, #111118); background: var(--paper, #fff); border: 1px solid var(--mute, #5b6378); border-radius: 48px; padding: 8px 14px; min-height: 40px; cursor: pointer; }
+.rem-select:disabled { opacity: .55; cursor: default; }
+.rem:not(.is-on) .rem-time label { color: var(--mute, #5b6378); }
+.rem-msg { margin: 10px 0 0; color: var(--mute, #5b6378); min-height: 1em; }
+.rem-msg:empty { display: none; }
+.rem-msg.rem-warn { color: var(--err, #cc1111); }
+.rem-msg.rem-info { color: var(--ink, #111118); }
+@media (max-width: 760px) { .rem-title { font-size: 18px; } .rem-select { flex: 1 1 auto; } }
+@media (prefers-reduced-motion: reduce) { .rem-switch, .rem-knob { transition: none; } }
+@media (forced-colors: active) {
+  .rem-switch { border: 2px solid ButtonText; box-shadow: none; }
+  .rem-knob { background: ButtonText; top: 4px; left: 4px; }
+  .rem-switch[aria-checked="true"] { background: Highlight; }
+  .rem-switch[aria-checked="true"] .rem-knob { background: HighlightText; }
+}
