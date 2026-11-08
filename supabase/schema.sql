@@ -192,8 +192,14 @@ $$;
 -- Admin edits must survive the devices' max-merge (js/cloud/merge.js). Each edit is written into the
 -- state with a stamp, state.adminEdits:
 --   fields:  { "totalXp" | "gems" | "streak.freezes" | "streak.count" | "streak.best":
---              { at, to, from, days? } }      at = server time in ms, to = the new value,
---                                             from = the value just before, days = sum of xpByDay before
+--              { at, to, from, days?, base? } }  at = server time in ms, to = the new value,
+--                                             from = the value just before, days = sum of xpByDay before,
+--                                             base = the new wallet base (gems and streak.freezes)
+-- Cherries (gems) and stashes (streak.freezes) are ledger balances (js/wallet.js, 2026-11-08):
+--   state.wallet.{gems|freezes} = { base, earn: {<key>: n}, spend: {<key>: n} },
+--   balance = base + sum(earn) - sum(spend), and state.gems / state.streak.freezes only mirror it.
+-- An edit sets the base so the balance is exactly `to` over the counters the cloud has now, and keeps
+-- the counters: a device's earning/spending the cloud hasn't seen yet then lands on top exactly once.
 --   nodes:   { "<path node id>": { at, to: {done, crowns, best} | null, from: {...} | null } }
 --   courses: { "git": at }                    the course's progress was reset at that time
 -- A device that hasn't seen an edit is moved onto it when it merges: the edited value replaces the one
@@ -234,7 +240,9 @@ as $$
 declare
   paths constant jsonb := '{"totalXp": ["totalXp"], "gems": ["gems"], "streak.freezes": ["streak", "freezes"],
                             "streak.count": ["streak", "count"], "streak.best": ["streak", "best"]}';
+  wallets constant jsonb := '{"gems": "gems", "streak.freezes": "freezes"}';   -- edit key -> wallet account
   s jsonb; r integer; e jsonb; t bigint; days numeric;
+  wk text; acc jsonb; earned numeric; spent numeric; nbase numeric;
   k text; p text[]; v jsonb; want numeric; cur numeric;
   nid text; nv jsonb; nfrom jsonb; nto jsonb; done boolean; crowns integer;
 begin
@@ -272,6 +280,29 @@ begin
     want := floor((v #>> '{}')::numeric);
     p := array(select jsonb_array_elements_text(paths -> k));
     cur := case when jsonb_typeof(s #> p) = 'number' then (s #>> p)::numeric else 0 end;
+    if wallets ? k then
+      -- a ledger balance: move the base, keep the counters, write the mirror
+      wk := wallets ->> k;
+      acc := case when jsonb_typeof(s -> 'wallet' -> wk) = 'object' then s -> 'wallet' -> wk
+                  -- a save from before the ledger: its plain number is the base (as js/storage.js migrates it)
+                  else jsonb_build_object('base', greatest(cur, 0)) end;
+      acc := jsonb_build_object(
+        'base', case when jsonb_typeof(acc -> 'base') = 'number' then acc -> 'base' else '0'::jsonb end,
+        'earn', case when jsonb_typeof(acc -> 'earn') = 'object' then acc -> 'earn' else '{}'::jsonb end,
+        'spend', case when jsonb_typeof(acc -> 'spend') = 'object' then acc -> 'spend' else '{}'::jsonb end);
+      select coalesce(sum(greatest((x.value #>> '{}')::numeric, 0)), 0) into earned
+        from jsonb_each(acc -> 'earn') x where jsonb_typeof(x.value) = 'number';
+      select coalesce(sum(greatest((x.value #>> '{}')::numeric, 0)), 0) into spent
+        from jsonb_each(acc -> 'spend') x where jsonb_typeof(x.value) = 'number';
+      cur := greatest((acc ->> 'base')::numeric + earned - spent, 0);
+      continue when cur = want;
+      nbase := want - earned + spent;
+      if jsonb_typeof(s -> 'wallet') is distinct from 'object' then s := jsonb_set(s, '{wallet}', '{}'::jsonb); end if;
+      s := jsonb_set(s, array['wallet', wk], jsonb_set(acc, '{base}', to_jsonb(nbase)), true);
+      s := jsonb_set(s, p, to_jsonb(want), true);
+      e := jsonb_set(e, array['fields', k], jsonb_build_object('at', t, 'to', want, 'from', cur, 'base', nbase), true);
+      continue;
+    end if;
     continue when cur = want;
     s := jsonb_set(s, p, to_jsonb(want), true);
     e := jsonb_set(e, array['fields', k],
