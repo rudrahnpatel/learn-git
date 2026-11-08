@@ -89,8 +89,10 @@ export class Terminal {
     }
     this.scroll();
   }
-  // folded: the latest entry is the only one showing, so show it from its command line down; else follow the end
-  scroll() { this.out.scrollTop = this.out.classList.contains('collapsed') && !this.showOld ? 0 : this.out.scrollHeight; }
+  // always follow the end: when the history is folded only the latest entry shows, and on a short pane (phone keyboard
+  // up) scrolling to its top left the output it just printed hidden below; at the end its last lines are in view, and
+  // when it fits, its command line too
+  scroll() { this.out.scrollTop = this.out.scrollHeight; }
   note(text, cls = 'hint') { this.print([{ t: text, c: cls }]); }
   // Suggestions: the first `inline` show as quiet chips; the rest wait behind one "+N" chip.
   setChips(list, { inline = 3, moreLabel = '' } = {}) {

@@ -648,7 +648,10 @@ body[data-screen="lesson"] .shape, body[data-screen="challenge"] .shape { opacit
 .kb .lesson-inner { margin: 0 auto auto; }
 .kb .ex { gap: 8px; }
 .kb .ex-prompt { font-size: 16px; line-height: 1.3; }
-.kb .type-term { min-height: 0; max-height: 132px; }
+.kb .type-term { min-height: 0; max-height: none; flex: none; }
+/* keyboard up: the terminal sizes to its content and its output gets a real share of the visible screen (the input and
+   the symbol row used to leave it about one line); the file tree above (.type-left, flex 1 1 0) gives up the room */
+.kb .type-term .term-out { flex: none; min-height: 3.4em; max-height: calc(var(--vvh, 60vh) * .3); }
 .kb .type-term .term-out { padding-top: 8px; }
 /* the graph fills whatever the keyboard leaves between the question and the terminal (it fits itself to that box) */
 .kb .type-left { flex: 1 1 0; min-height: 64px; padding: 4px 8px; overflow: auto; }
@@ -1930,6 +1933,7 @@ body[data-screen="lesson"] .toast { top: auto; bottom: calc(var(--foot-h, 100px)
 .sym-row { display: none; }
 @media (max-width: 760px) {
   .sym-row { display: flex; gap: 3px; padding: 0 8px 8px; }
+  .type-term:has(.sym-row) { max-height: clamp(176px, 27vh, 250px); } /* room for the symbol row on top of the output */
   .sym { flex: 1 1 0; min-width: 24px; min-height: 36px; padding: 0; border: 0; border-radius: 10px; background: var(--term-chip); color: var(--term-cmd); font: 15px var(--mono); cursor: pointer; }
   .sym:active { background: var(--term-chip-hover); }
   .sym:focus-visible { outline: 2px solid var(--term-cmd); outline-offset: -2px; }
