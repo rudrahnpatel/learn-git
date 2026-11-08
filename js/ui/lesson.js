@@ -1,6 +1,6 @@
 // The lesson player: full screen, one exercise per screen, a Check button, a feedback sheet
 // that slides up, re-queued mistakes, a springy progress bar and a combo flame.
-import { h, confirmModal } from '../dom.js';
+import { h, confirmModal, announce } from '../dom.js';
 import { APP } from '../brand.js';
 import { sfx } from '../sound.js';
 import { renderExercise } from './exercises.js';
@@ -28,6 +28,12 @@ export function playSession(root, { title, items, mode = 'lesson', engine = 'git
     onAnswer?.({ ex: item.key, type: item.ex.type, ok, attempt, skipped });
   };
   let solved = 0, pos = 0, combo = 0, bestCombo = 0, bonusXp = 0, reviewed = 0;
+  // Back: the player may step back to earlier cards. `furthest` is the first card not yet done; anything before it is
+  // shown read-only (a learn card to re-read, an answered exercise locked with its answer) and Next walks forward
+  // again without grading or counting anything twice. `done[pos]` keeps what each card's first check showed.
+  let furthest = 0;
+  const done = [];
+  const reviewing = () => pos < furthest;
   let cur = null, checked = false, result = null, finished = false;
   const t0 = Date.now();
 
@@ -47,7 +53,8 @@ export function playSession(root, { title, items, mode = 'lesson', engine = 'git
   const body = h('main', { class: 'lesson-body' }, inner);
   const checkBtn = h('button', { class: 'btn primary big check', type: 'button', disabled: true, onclick: () => check() }, 'Check');
   const skipBtn = h('button', { class: 'btn ghost', type: 'button', onclick: () => skip() }, 'Can\'t do it now');
-  const footInner = h('div', { class: 'foot-inner' }, skipBtn, checkBtn);
+  const backBtn = h('button', { class: 'icon-btn round back-btn', type: 'button', 'aria-label': 'Previous card', title: 'Previous card', onclick: () => back() }, '←');
+  const footInner = h('div', { class: 'foot-inner' }, backBtn, skipBtn, checkBtn);
   const foot = h('footer', { class: 'lesson-foot' }, footInner);
   const el = h('div', { class: 'lesson' }, top, body, foot);
   root.replaceChildren(el);
@@ -102,16 +109,25 @@ export function playSession(root, { title, items, mode = 'lesson', engine = 'git
       mode === 'mistakes' && !item.retry ? h('span', { class: 'tag-pill mono' }, 'REVIEW') : null,
     ].filter(Boolean));
     cur = renderExercise(ex, { engine, onChange: () => sync(), submit: () => { if (!checked && cur.ready()) check(); } });
-    stage.replaceChildren(cur.el);
+    const old = reviewing() ? done[pos] : null;
+    if (old && !cur.learn) {
+      cur.lock();
+      tagRow.prepend(h('span', { class: 'tag-pill mono' }, 'ALREADY ANSWERED'));
+    }
+    stage.replaceChildren(cur.el, ...(old && !cur.learn ? [h('p', { class: 'review-note' },
+      old.ok ? 'You got this one right.' : old.skipped ? 'You skipped this one.' : 'You missed this one; it comes back later.',
+      old.answer ? [' Answer: ', h(old.mono ? 'code' : 'span', {}, old.answer)] : null)] : []));
     stage.classList.remove('enter'); void stage.offsetWidth; stage.classList.add('enter');
     body.scrollTop = 0;
     inner.style.flex = '';
     document.body.style.setProperty('--sheet-extra', '0px');
     foot.className = 'lesson-foot';
-    checkBtn.textContent = cur.learn ? 'Got it' : 'Check';
-    skipBtn.classList.toggle('hidden', !!cur.learn);
-    footInner.replaceChildren(skipBtn, checkBtn);
+    checkBtn.textContent = reviewing() ? 'Next' : cur.learn ? 'Got it' : 'Check';
+    skipBtn.classList.toggle('hidden', !!cur.learn || reviewing());
+    backBtn.classList.toggle('hidden', pos === 0);
+    footInner.replaceChildren(backBtn, skipBtn, checkBtn);
     sync();
+    if (reviewing() && !cur.learn) { checkBtn.focus({ preventScroll: true }); return; }
     // the focus starts on the new exercise: its own control (the type exercise's terminal), else its prompt, so a
     // screen reader reads the question and Tab goes on to the answers
     if (!cur.focus?.() && !stage.contains(document.activeElement)) {
@@ -119,13 +135,19 @@ export function playSession(root, { title, items, mode = 'lesson', engine = 'git
       if (q) { q.setAttribute('tabindex', '-1'); q.focus({ preventScroll: true }); }
     }
   }
-  function sync() { checkBtn.disabled = !cur || !cur.ready(); }
+  function sync() { checkBtn.disabled = !cur || (!reviewing() && !cur.ready()); }
+  function back() {
+    if (finished || pos === 0 || (checked && !reviewing())) return; // not while a feedback sheet is open
+    sfx.tap(); pos--; show();
+    announce(`Card ${pos + 1}${done[pos] && !cur.learn ? ', already answered' : ''}`);
+  }
 
   function check() {
     if (!cur || checked || finished) return;
+    if (reviewing()) { sfx.tap(); pos++; show(); return; }   // a card seen before: just walk forward
     if (!cur.ready()) return;
     const item = queue[pos];
-    if (cur.learn) { solved++; drawBar(); sfx.tap(); pos++; show(); return; }
+    if (cur.learn) { solved++; drawBar(); sfx.tap(); done[pos] = { ok: true }; pos++; furthest = pos; show(); return; }
     checked = true;
     if (document.body.classList.contains('kb')) document.activeElement?.blur?.(); // close the keyboard for the sheet
     cur.lock();
@@ -154,6 +176,7 @@ export function playSession(root, { title, items, mode = 'lesson', engine = 'git
       if (mode === 'mistakes') game.reviewResult(key, false);
       else game.recordMistake(key);
     }
+    done[pos] = { ok: !!result.ok, answer: result.answer, mono: result.mono };
     drawBar();
     sheet(result, item.ex);
   }
@@ -169,6 +192,7 @@ export function playSession(root, { title, items, mode = 'lesson', engine = 'git
     combo = 0;
     queue.push({ ...item, retry: true });
     if (mode !== 'mistakes') game.recordMistake(item.key);
+    done[pos] = { ok: false, skipped: true, answer };
     drawBar();
     sheet({ ok: false, answer, skipped: true }, item.ex);
   }
@@ -191,7 +215,7 @@ export function playSession(root, { title, items, mode = 'lesson', engine = 'git
     footInner.replaceChildren(content);
     setTimeout(() => cont.focus({ preventScroll: true }), 60);
   }
-  function next() { pos++; show(); }
+  function next() { pos++; furthest = Math.max(furthest, pos); show(); }
 
   function finish() {
     if (finished) return;
@@ -228,7 +252,7 @@ export function playSession(root, { title, items, mode = 'lesson', engine = 'git
       if (checked) next(); else check();
       return;
     }
-    if (!checked && cur && cur.key(e)) { e.preventDefault(); sync(); }
+    if (!checked && !reviewing() && cur && cur.key(e)) { e.preventDefault(); sync(); }
   };
   document.addEventListener('keydown', onKey);
   drawBar();

@@ -1935,6 +1935,10 @@ body[data-screen="lesson"] .toast { top: auto; bottom: calc(var(--foot-h, 100px)
 
 /* learn demo: the tree and what the commands printed */
 .demo-files { min-height: 60px; display: block; overflow: auto; }
+/* the demo card is height-capped: the file tree is the part that gives way (it scrolls inside itself), while the
+   BEFORE/AFTER row and the printed output keep their full size (they were squeezed to a sliver by a long tree) */
+.demo:has(.demo-files) > .demo-head, .demo:has(.demo-files) > .demo-out { flex: none; }
+.ex-learn .demo:has(.demo-files) > .demo-stage.demo-files { flex: 0 1 auto; min-height: 72px; }
 .ex-learn .demo-stage.demo-files { display: block; }
 .demo-out { background: var(--term-bg); color: var(--term-fg); border-radius: 16px; padding: 10px 14px; font-size: 12px; min-height: 2.6em; max-height: 9.5em; overflow-y: auto; }
 .demo-out:empty::before { content: "$"; color: var(--term-quiet); }
@@ -1950,3 +1954,11 @@ body[data-screen="lesson"] .toast { top: auto; bottom: calc(var(--foot-h, 100px)
 /* placement for a newly opened course (Settings > Switch course) */
 .placement .onb-opts { margin-top: 12px; }
 .place-opt { width: 100%; }
+
+/* lesson Back button (js/ui/lesson.js back()): a round icon button at the start of the footer; earlier cards come back
+   read-only, an answered exercise with this note under it */
+.lesson-foot .back-btn { flex: none; width: 48px; height: 48px; font-size: 22px; line-height: 1; }
+.lesson-foot .back-btn.hidden { display: none; }
+.review-note { margin: 4px 0 0; font-size: 15px; color: var(--mute); }
+.review-note code { font-size: .9em; }
+@media (max-width: 760px) { .lesson-foot .back-btn { width: 44px; height: 44px; font-size: 20px; } }
