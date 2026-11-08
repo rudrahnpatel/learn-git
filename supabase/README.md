@@ -62,6 +62,15 @@ the app is deployed on (`treeling.vercel.app`).
 file into a new query and run it again. Tables and data are kept; functions, policies and grants are
 replaced.
 
+**2026-11-08, cherry/stash ledger:** run `supabase/migrations/wallet_ledger.sql` once (SQL Editor →
+New query → paste → Run), or re-run the whole `schema.sql`, which contains the same function. It only
+replaces `admin_update_progress`, so that editing Cherries or Stashes on `/admin` moves the new
+`state.wallet` ledger instead of the plain number. No table, policy or config changes; existing rows
+are migrated by the app itself the next time a device syncs. Run it before (or right after) deploying
+the app: until it is run, an edit of Cherries or Stashes on a player whose devices already use the
+ledger changes only the plain number and is ignored by the next sync (nothing breaks, the edit just
+doesn't take; `/admin` shows a warning when that happens). Edits made before the app update still apply.
+
 ## 5. Fill in the app config
 
 Edit `js/cloud/config.js`:

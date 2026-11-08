@@ -1,7 +1,10 @@
 // localStorage wrapper: every access is guarded (private mode, quota, disabled storage).
 // v2 keeps the whole game state under one key; v1 progress is migrated once on first load.
+import { walletOf, writeMirrors } from './wallet.js';
+
 const KEY = 'learn-git:v2';
 const V1_KEY = 'learn-git:progress:v1';
+const DEVICE_KEY = 'learn-git:device:v1';
 
 function read(key, fallback) {
   try {
@@ -25,8 +28,11 @@ export function freshState() {
     xpByDay: {},           // 'YYYY-MM-DD' -> xp
     // Field names predate the git-themed rewards and are kept so old saves load unchanged:
     // gems = cherries, freezes = stashes held, frozen = days a stash covered, chests = releases.
+    // gems and streak.freezes are mirrors of the wallet ledger below (js/wallet.js): game.js changes
+    // them only through earnGems/spendGems/addStashes/useStashes, never by writing the numbers.
     gems: 20,
     streak: { count: 0, best: 0, lastDay: null, freezes: 0, frozen: [], celebrated: null },
+    wallet: { gems: { base: 20, earn: {}, spend: {} }, freezes: { base: 0, earn: {}, spend: {} } },
     goalDays: {},          // 'YYYY-MM-DD' -> true when the daily goal was met
     nodes: {},             // path node id -> { done, crowns, best }
     challenges: {},        // v1 level id -> { stars }
@@ -62,6 +68,7 @@ export function loadState() {
   if (looksV2) s.v = 2;
   else {
     if (raw) backup(raw);
+    newDeviceId();   // a fresh save starts fresh ledger counters (see deviceId below)
     s = freshState();
     migrateV1(s);
     write(KEY, s);
@@ -77,7 +84,11 @@ export function repairState(s) {
   out.courses = { ...base.courses, ...(s.courses || {}) };
   for (const [id, c] of Object.entries(out.courses)) out.courses[id] = { ...freshCourse(), ...c };
   out.cosmetics = { owned: { ...(s.cosmetics?.owned || {}) }, equipped: { ...(s.cosmetics?.equipped || {}) } };
-  return out;
+  // The wallet ledger (js/wallet.js). A save from before it is migrated: base = its cherries/stashes,
+  // no counters. Two devices migrating the same cloud value get the same base, and bases max-merge,
+  // so nothing is counted twice. The plain numbers are then re-derived from the ledger.
+  out.wallet = walletOf({ ...out, wallet: s.wallet });
+  return writeMirrors(out);
 }
 export function saveState(s) { return write(KEY, s); }
 // Keeps up to three copies of a save that could not be loaded, newest last, under KEY:backup.
@@ -88,7 +99,24 @@ function backup(raw) {
   write(KEY + ':backup', arr.slice(-3));
 }
 export const STATE_KEY = KEY;
-export function resetState() { remove(KEY); }
+export function resetState() { remove(KEY); newDeviceId(); }
+
+// This browser's id in the wallet ledger, kept outside the save so a merged copy from the cloud can't
+// overwrite it. It changes whenever the save starts over (first run, reset, cleared device): the
+// ledger counts each id's earn/spend as "max of what any copy has seen", so a restarted save reusing
+// an old id would have its new spending hidden behind the old, larger counter.
+let device = null;
+const randomId = () => {
+  try { if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID().replace(/-/g, '').slice(0, 16); } catch { /* fall through */ }
+  return Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+};
+export function deviceId() {
+  if (device) return device;
+  const stored = read(DEVICE_KEY, null);
+  if (typeof stored === 'string' && /^[0-9a-z]{8,40}$/.test(stored)) return (device = stored);
+  return newDeviceId();
+}
+function newDeviceId() { device = randomId(); write(DEVICE_KEY, device); return device; }
 
 // v1 stored { levels: { id: { stars, moves } }, speedBest, bisectBest }.
 function migrateV1(s) {

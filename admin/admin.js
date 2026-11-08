@@ -10,6 +10,7 @@
 import { h, confirmModal } from '../js/dom.js';
 import { applyTheme } from '../js/theme.js';
 import { toast } from '../js/ui/fx.js';
+import { walletOf, balance } from '../js/wallet.js';
 import { cloudConfigured, getClient, signInWithGoogle, cleanAuthParams, profileOf } from '../js/cloud/client.js';
 
 const root = document.getElementById('admin');
@@ -108,8 +109,9 @@ async function listUsers(sb, me, signOut) {
 // The numbers an admin can set (the keys are admin_update_progress's patch keys).
 const NUMBERS = [
   { key: 'totalXp', label: 'XP', get: (s) => s.totalXp },
-  { key: 'gems', label: 'Cherries', get: (s) => s.gems },
-  { key: 'streak.freezes', label: 'Stashes', get: (s) => s.streak?.freezes, max: 2 },   // MAX_STASHES in js/ui/game.js
+  // cherries and stashes are ledger balances (js/wallet.js); the plain numbers are only mirrors
+  { key: 'gems', label: 'Cherries', get: (s) => balance(walletOf(s).gems) },
+  { key: 'streak.freezes', label: 'Stashes', get: (s) => balance(walletOf(s).freezes), max: 2 },   // MAX_STASHES in js/ui/game.js
   { key: 'streak.count', label: 'Streak', get: (s) => s.streak?.count },
   { key: 'streak.best', label: 'Best streak', get: (s) => s.streak?.best },
 ];
@@ -153,7 +155,11 @@ async function openEditor(sb, me, r, onChange) {
     const { data, error } = await sb.rpc(fn, args);
     if (error) { toast(`Not saved: ${error.message}`, { ms: 4000 }); return false; }
     if (data && typeof data === 'object') onChange({ total_xp: n0(data.totalXp), streak: n0(data.streak?.count), updated_at: new Date().toISOString() });
-    toast(okText);
+    // The database still has the pre-ledger admin_update_progress: a cherry/stash edit on a ledger save
+    // would be ignored by the next sync (supabase/README.md, supabase/migrations/wallet_ledger.sql).
+    const stale = data?.wallet && ['gems', 'streak.freezes'].some((k) => k in (args.patch || {}) && data.adminEdits?.fields?.[k] && typeof data.adminEdits.fields[k].base !== 'number');
+    if (stale) toast('Cherries/stashes won\'t stick: run supabase/migrations/wallet_ledger.sql first.', { ms: 6000 });
+    else toast(okText);
     await redraw();
     return true;
   };

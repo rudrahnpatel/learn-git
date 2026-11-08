@@ -7,8 +7,13 @@
 //   goalDays, seen, achievements, cosmetics.owned, course cards/seenCards
 //                        union (a timestamp keeps the earliest)
 //   stats                max per field; bisectBest min; accSum/accN as a pair from the side with more lessons
-//   streak               count/lastDay/celebrated from the later lastDay; best and freezes max; frozen union
-//   gems, boostUntil     max (spending on one device can be undone by the other: accepted)
+//   streak               count/lastDay/celebrated from the later lastDay; best max; frozen union
+//   wallet               cherries and stashes as a ledger (js/wallet.js): base max, every earn/spend
+//                        counter max per key (a device id, or "day:<date>" for a popped stash), so each
+//                        earn and each spend counts once and a spend on one device can't be undone by
+//                        another. A popped stash whose day was played after all (goalDays) is handed back.
+//   gems, streak.freezes derived from the merged wallet (balance, clamped at 0); never merged themselves
+//   boostUntil           max (an end time; nothing spends it)
 //   mistakes             union; per key the copy with the later due
 //   quests               the later day; same day: progress max, claimed union, chest OR
 //   onboarded            OR
@@ -18,6 +23,8 @@
 //                        seen an edit is "rebased" onto it: the edited value replaces the one it was made
 //                        from, and whatever that copy gained beyond it (play the admin never saw) is kept on
 //                        top. Then both copies merge by the rules above. See rebase() below.
+
+import { walletOf, mergeWallets, refundPlayedDays, writeMirrors, balance, baseFor } from '../wallet.js';
 
 const isObj = (x) => x != null && typeof x === 'object' && !Array.isArray(x);
 const num = (x) => (typeof x === 'number' && Number.isFinite(x) ? x : 0);
@@ -114,7 +121,7 @@ function mergeStreak(a = {}, b = {}) {
   out.count = la === lb ? Math.max(num(a.count), num(b.count)) : num(later.count);
   out.lastDay = later.lastDay ?? null;
   out.best = Math.max(num(a.best), num(b.best), out.count);
-  out.freezes = Math.max(num(a.freezes), num(b.freezes));
+  delete out.freezes;   // derived from the wallet afterwards (mergeStates)
   out.frozen = frozen;
   out.celebrated = la === lb ? ([a.celebrated, b.celebrated].filter(Boolean).sort().pop() ?? later.celebrated ?? null) : (later.celebrated ?? null);
   return out;
@@ -142,12 +149,15 @@ function mergeCourses(a = {}, b = {}) {
 
 /* ------------------------------------------------------------ admin edits */
 // state.adminEdits, written only by the admin_* functions in supabase/schema.sql (server clock, ms):
-//   fields:  { totalXp | gems | streak.freezes | streak.count | streak.best: { at, to, from, days? } }
+//   fields:  { totalXp | gems | streak.freezes | streak.count | streak.best: { at, to, from, days?, base? } }
 //            to = the value the admin set, from = the cloud's value just before, days = sum of
-//            xpByDay just before (totalXp only)
+//            xpByDay just before (totalXp only), base = the wallet base that makes the balance `to`
+//            over the cloud's ledger counters at that moment (gems and streak.freezes only)
 //   nodes:   { <path node id>: { at, to: { done, crowns, best } | null, from: { ... } | null } }
 //   courses: { <course id>: at }   the course's progress was reset at `at`
 export const EDIT_FIELDS = { totalXp: ['totalXp'], gems: ['gems'], 'streak.freezes': ['streak', 'freezes'], 'streak.count': ['streak', 'count'], 'streak.best': ['streak', 'best'] };
+// The edit fields that are wallet balances (edit key -> wallet account).
+export const WALLET_EDITS = { gems: 'gems', 'streak.freezes': 'freezes' };
 // What a course reset clears, besides courses[<id>].cards/seenCards. The git course predates the
 // course-aware layer, so its per-course fields still live at the top level (see js/storage.js).
 export const COURSE_FIELDS = { git: ['nodes', 'challenges', 'mistakes'] };
@@ -202,6 +212,16 @@ function rebase(s, E) {
   for (const [k, e] of Object.entries(E.fields)) {
     const path = EDIT_FIELDS[k];
     if (!path || num(own.fields?.[k]?.at) >= num(e.at)) continue;
+    if (WALLET_EDITS[k]) {
+      // Ledger balances: only the base moves. The counters stay and max-merge as usual, so what the
+      // admin saw is replaced by `to`, and every earn/spend the cloud didn't have yet lands on top
+      // exactly once. An edit from before the ledger (no `base`) moves this copy's own balance like
+      // any other number: to + max(0, balance − from).
+      const w = out.wallet = walletOf(out);
+      const acc = w[WALLET_EDITS[k]];
+      acc.base = typeof e.base === 'number' ? e.base : baseFor(num(e.to) + Math.max(0, balance(acc) - num(e.from)), acc);
+      continue;
+    }
     let o = out;
     for (const p of path.slice(0, -1)) { if (!isObj(o[p])) o[p] = {}; o = o[p]; }
     const last = path[path.length - 1];
@@ -212,7 +232,7 @@ function rebase(s, E) {
 }
 
 // Fields with a rule of their own; every other field comes from the newer save.
-const RULED = new Set(['adminEdits', 'v', 'savedAt', 'resetAt', 'onboarded', 'totalXp', 'xpByDay', 'gems', 'streak', 'goalDays', 'nodes', 'challenges', 'quests', 'boostUntil', 'achievements', 'mistakes', 'stats', 'seen', 'courses', 'cosmetics']);
+const RULED = new Set(['adminEdits', 'v', 'savedAt', 'resetAt', 'onboarded', 'totalXp', 'xpByDay', 'gems', 'wallet', 'streak', 'goalDays', 'nodes', 'challenges', 'quests', 'boostUntil', 'achievements', 'mistakes', 'stats', 'seen', 'courses', 'cosmetics']);
 
 export function mergeStates(a, b) {
   if (!isObj(a)) return clone(b);
@@ -244,10 +264,11 @@ export function mergeStates(a, b) {
   const floor = xpEdit ? num(xpEdit.to) + Math.max(0, daySum - num(xpEdit.days)) : daySum;
   out.totalXp = Math.max(num(a.totalXp), num(b.totalXp), floor);
   if (E) out.adminEdits = clone(E);
-  out.gems = Math.max(num(a.gems), num(b.gems));
   out.boostUntil = Math.max(num(a.boostUntil), num(b.boostUntil));
   out.streak = mergeStreak(a.streak, b.streak);
   out.goalDays = unionEarliest(a.goalDays, b.goalDays);
+  out.wallet = refundPlayedDays(mergeWallets(walletOf(a), walletOf(b)), out.goalDays);
+  writeMirrors(out);   // gems and streak.freezes
   out.nodes = mergeNodes(a.nodes, b.nodes);
   out.challenges = mergeChallenges(a.challenges, b.challenges);
   out.quests = mergeQuests(a.quests, b.quests);

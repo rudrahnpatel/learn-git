@@ -4,12 +4,26 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mergeStates, sameState } from '../js/cloud/merge.js';
 import { freshState, repairState } from '../js/storage.js';
+import { record, writeMirrors, balance, stashKey } from '../js/wallet.js';
 
+// A save with the patch applied; gems / streak.freezes in the patch become the wallet's base (the same
+// migration an old save gets in repairState).
 const base = (patch = {}) => {
   const s = freshState();
   for (const [k, v] of Object.entries(patch)) s[k] = isPlain(v) && isPlain(s[k]) ? { ...s[k], ...v } : v;
-  return s;
+  delete s.wallet;
+  return repairState(s);
 };
+const J = (x) => JSON.parse(JSON.stringify(x));
+// What game.js does: earnGems / spendGems / addStashes / useStashes on one device (returns a new copy).
+function act(state, device, { earn = 0, spend = 0, stashes = 0, popDays = [] } = {}) {
+  const s = J(state);
+  record(s.wallet.gems, 'earn', device, earn);
+  if (spend) { assert.ok(balance(s.wallet.gems) >= spend, 'spending more than the balance'); record(s.wallet.gems, 'spend', device, spend); }
+  record(s.wallet.freezes, 'earn', device, stashes);
+  for (const d of popDays) record(s.wallet.freezes, 'spend', stashKey(d), 1);
+  return writeMirrors(s);
+}
 const isPlain = (x) => x && typeof x === 'object' && !Array.isArray(x);
 
 // Two realistic, different saves: a phone and a laptop.
@@ -90,7 +104,7 @@ test('stats: max per field, bisectBest min, accuracy pair from the side with mor
   assert.equal(none.stats.bisectBest, null);
 });
 
-test('streak: count from the later lastDay, best max, frozen union, freezes max', () => {
+test('streak: count from the later lastDay, best max, frozen union; freezes from the wallet', () => {
   const m = mergeStates(phone, laptop);
   assert.equal(m.streak.lastDay, '2026-11-03');
   assert.equal(m.streak.count, 1);
@@ -101,10 +115,11 @@ test('streak: count from the later lastDay, best max, frozen union, freezes max'
   assert.equal(sameDay.streak.count, 5);
 });
 
-test('gems and boostUntil: max', () => {
+test('boostUntil: max; two pre-ledger saves migrate to bases that max-merge (the old rule, once)', () => {
   const m = mergeStates(phone, laptop);
   assert.equal(m.gems, 40);
   assert.equal(m.boostUntil, 900);
+  assert.deepEqual(m.wallet.gems, { base: 40, earn: {}, spend: {} });
 });
 
 test('mistakes: union, per key the later due', () => {
@@ -198,6 +213,7 @@ test('sameState ignores key order', () => {
 // new values plus a stamp saying what each value was before (tests/sync.test.mjs and the SQL check
 // in the notes cover the server side).
 const PATHS = { totalXp: ['totalXp'], gems: ['gems'], 'streak.freezes': ['streak', 'freezes'], 'streak.count': ['streak', 'count'], 'streak.best': ['streak', 'best'] };
+const WALLET = { gems: 'gems', 'streak.freezes': 'freezes' };
 function adminEdit(state, patch, at) {
   const s = JSON.parse(JSON.stringify(state));
   const E = s.adminEdits ||= { fields: {}, nodes: {}, courses: {} };
@@ -218,6 +234,15 @@ function adminEdit(state, patch, at) {
     }
     const p = PATHS[k];
     const o = p.length === 1 ? s : s[p[0]];
+    if (WALLET[k]) {
+      // the ledger: from = the derived balance; the new base makes the balance `to` over these counters
+      const acc = s.wallet[WALLET[k]];
+      const from = balance(acc), sum = (m) => Object.values(m).reduce((x, y) => x + y, 0);
+      acc.base = to - sum(acc.earn) + sum(acc.spend);
+      o[p[p.length - 1]] = to;
+      E.fields[k] = { at, to, from, base: acc.base };
+      continue;
+    }
     const from = o[p[p.length - 1]] || 0;
     o[p[p.length - 1]] = to;
     E.fields[k] = { at, to, from, ...(k === 'totalXp' ? { days: Object.values(s.xpByDay).reduce((x, y) => x + y, 0) } : {}) };
@@ -249,7 +274,7 @@ test('admin edit: a lowered value sticks against a copy that synced before the e
 test('admin edit: a device offline during the edit keeps the play the admin never saw, on top', () => {
   const cloud = adminEdit(synced, { totalXp: 100, gems: 5 }, T);
   // offline: earned 20 XP on a new day and 7 cherries, never synced, then comes back
-  const offline = { ...JSON.parse(JSON.stringify(synced)), totalXp: 520, gems: 307, xpByDay: { ...synced.xpByDay, '2026-11-03': 20 }, savedAt: 9000 };
+  const offline = { ...act(synced, 'phone', { earn: 7 }), totalXp: 520, xpByDay: { ...synced.xpByDay, '2026-11-03': 20 }, savedAt: 9000 };
   const m = mergeStates(offline, cloud);
   assert.equal(m.totalXp, 120);
   assert.equal(m.gems, 12);
@@ -336,7 +361,7 @@ test('admin edits: a node edit from before a course reset is void', () => {
 
 test('admin edits: idempotent and commutative', () => {
   const cloud = adminEdit(synced, { totalXp: 100, gems: 5, 'streak.count': 1, nodes: { 'basics:lesson:a': null } }, T);
-  const offline = { ...JSON.parse(JSON.stringify(synced)), totalXp: 520, gems: 307, xpByDay: { ...synced.xpByDay, '2026-11-03': 20 } };
+  const offline = { ...act(synced, 'phone', { earn: 7 }), totalXp: 520, xpByDay: { ...synced.xpByDay, '2026-11-03': 20 } };
   assert.deepEqual(mergeStates(cloud, cloud), cloud);
   const m = mergeStates(offline, cloud);
   assert.deepEqual(mergeStates(m, m), m);
@@ -349,4 +374,153 @@ test('admin edits ride along with a "reset everywhere"', () => {
   const cloud = adminEdit(synced, { totalXp: 100 }, T);
   const reset = { ...freshState(), resetAt: 20_000, savedAt: 20_000 };
   assert.ok(sameState(mergeStates(cloud, reset), reset));
+});
+
+/* ---------------------------------------------------------------- wallet ledger */
+// Cherries (gems) and stashes (streak.freezes) are a per-device ledger (js/wallet.js), so a spend on one
+// device can't be undone by the other device's copy, the way max(gems) used to undo it.
+const legacy = (gems, freezes = 0) => repairState({ v: 2, onboarded: true, gems, streak: { count: 3, best: 3, lastDay: '2026-11-07', freezes } });
+
+test('wallet: the reported bug. Both at 110, the phone buys two stashes, sync in either order: 10 cherries, 2 more stashes', () => {
+  const laptop = legacy(110), phoneStart = legacy(110);
+  assert.equal(laptop.gems, 110);
+  assert.deepEqual(laptop.wallet.gems, { base: 110, earn: {}, spend: {} });
+  // two stash buys on the phone: -50 cherries, +1 stash, twice
+  const phone = act(act(phoneStart, 'phone', { spend: 50, stashes: 1 }), 'phone', { spend: 50, stashes: 1 });
+  assert.equal(phone.gems, 10);
+  assert.equal(phone.streak.freezes, 2);
+  // phone pushes first (cloud = laptop's copy), then the laptop pulls; and the other way round
+  const cloud1 = mergeStates(phone, laptop), laptop1 = mergeStates(laptop, cloud1);
+  const cloud2 = mergeStates(laptop, phone), phone2 = mergeStates(phone, cloud2);
+  for (const s of [cloud1, laptop1, cloud2, phone2, mergeStates(laptop1, phone2)]) {
+    assert.equal(s.gems, 10);
+    assert.equal(s.streak.freezes, 2);
+  }
+  // the laptop's stale copy merged again (an old push, a retry) changes nothing
+  assert.deepEqual(mergeStates(laptop1, laptop), laptop1);
+  assert.deepEqual(mergeStates(laptop, laptop1), laptop1);
+});
+
+test('wallet: earning on both devices counts both; spending on both counts both', () => {
+  const start = legacy(100);
+  const a = act(start, 'phone', { earn: 15, spend: 50 }), b = act(start, 'laptop', { earn: 5, spend: 30 });
+  for (const m of [mergeStates(a, b), mergeStates(b, a)]) assert.equal(m.gems, 100 + 15 + 5 - 50 - 30);
+  // spending the same cherries twice offline leaves a debt: shown as 0, and later earnings pay it first
+  const c = act(start, 'phone', { spend: 80 }), d = act(start, 'laptop', { spend: 60 });
+  const m = mergeStates(c, d);
+  assert.equal(m.gems, 0);
+  assert.equal(act(m, 'phone', { earn: 30 }).gems, 0);
+  assert.equal(act(m, 'phone', { earn: 50 }).gems, 10);
+});
+
+test('wallet: a stash used on one device while the other was offline stays used', () => {
+  const start = legacy(0, 1);
+  const laptop = act(start, 'laptop', { popDays: ['2026-11-08'] });
+  laptop.streak = { ...laptop.streak, lastDay: '2026-11-09', frozen: ['2026-11-08'] };
+  assert.equal(laptop.streak.freezes, 0);
+  const phoneOffline = J(start);   // still thinks it holds one
+  for (const m of [mergeStates(laptop, phoneOffline), mergeStates(phoneOffline, laptop)]) {
+    assert.equal(m.streak.freezes, 0);
+    assert.deepEqual(m.streak.frozen, ['2026-11-08']);
+  }
+});
+
+test('wallet: two devices popping a stash for the same missed day use one stash, not two', () => {
+  const start = legacy(0, 2);
+  const a = act(start, 'phone', { popDays: ['2026-11-08'] }), b = act(start, 'laptop', { popDays: ['2026-11-08'] });
+  assert.equal(mergeStates(a, b).streak.freezes, 1);
+});
+
+test('wallet: a stash popped for a day that was played on another device is handed back', () => {
+  const start = legacy(0, 1);
+  // the phone played on 11-08; the laptop opened later with its stale copy and popped a stash for 11-08
+  const phone = { ...J(start), goalDays: { '2026-11-08': true } };
+  const laptop = act(start, 'laptop', { popDays: ['2026-11-08'] });
+  assert.equal(laptop.streak.freezes, 0);
+  for (const m of [mergeStates(phone, laptop), mergeStates(laptop, phone)]) assert.equal(m.streak.freezes, 1);
+});
+
+test('wallet: merging is idempotent, commutative and associative across three devices', () => {
+  const start = legacy(200, 1);
+  const a = act(start, 'a', { earn: 10, spend: 50, stashes: 1 }), b = act(start, 'b', { earn: 3, popDays: ['2026-11-08'] }), c = act(start, 'c', { spend: 20 });
+  const l = mergeStates(mergeStates(a, b), c), r = mergeStates(a, mergeStates(b, c)), x = mergeStates(mergeStates(c, a), b);
+  assert.deepEqual(l.wallet, r.wallet);
+  assert.deepEqual(l.wallet, x.wallet);
+  assert.equal(l.gems, 200 + 10 + 3 - 50 - 20);
+  assert.equal(l.streak.freezes, 1 + 1 - 1);
+  assert.deepEqual(mergeStates(l, l), l);
+  assert.deepEqual(mergeStates(l, a), l);
+});
+
+test('wallet: a save without a ledger keeps its cherries and stashes (migration), and repair leaves a ledger alone', () => {
+  const s = repairState({ v: 2, gems: 77, streak: { freezes: 2 } });
+  assert.equal(s.gems, 77);
+  assert.equal(s.streak.freezes, 2);
+  assert.deepEqual(s.wallet, { gems: { base: 77, earn: {}, spend: {} }, freezes: { base: 2, earn: {}, spend: {} } });
+  const later = act(s, 'phone', { spend: 50 });
+  assert.deepEqual(repairState(later), later);
+  // a stale plain number (e.g. written by an old app version) never overrides the ledger
+  assert.equal(repairState({ ...later, gems: 500 }).gems, 27);
+  assert.equal(freshState().gems, 20);
+  assert.equal(repairState({ v: 2, onboarded: true }).gems, 20);   // a save missing gems gets the default
+});
+
+test('admin wallet edit: the edited value wins; earning and spending the admin never saw land on top once', () => {
+  // the cloud: base 300, the phone has earned 50 and the laptop spent 30 so far (balance 320)
+  const cloudBefore = act(act(legacy(300), 'phone', { earn: 50 }), 'laptop', { spend: 30 });
+  assert.equal(cloudBefore.gems, 320);
+  const cloud = adminEdit(cloudBefore, { gems: 100 }, T);
+  assert.equal(cloud.gems, 100);
+  assert.deepEqual(cloud.adminEdits.fields.gems, { at: T, to: 100, from: 320, base: 80 });
+  // the phone was offline: earned 7 more and spent 50 more, on top of what the cloud had seen
+  const phone = act(cloudBefore, 'phone', { earn: 7, spend: 50 });
+  // and the laptop synced the edit, then spent 20
+  const laptop = act(mergeStates(cloudBefore, cloud), 'laptop', { spend: 20 });
+  assert.equal(laptop.gems, 80);
+  const want = 100 + 7 - 50 - 20;
+  const phoneSynced = mergeStates(phone, cloud);               // the phone rebases onto the edit
+  assert.equal(phoneSynced.gems, 100 + 7 - 50);
+  for (const m of [mergeStates(phoneSynced, laptop), mergeStates(laptop, phoneSynced), mergeStates(phone, laptop), mergeStates(laptop, phone),
+    mergeStates(mergeStates(phone, cloud), mergeStates(laptop, cloud))]) assert.equal(m.gems, want);
+  // stale pre-edit copies can't lift it back up, and nothing doubles on repeat merges
+  const m = mergeStates(phoneSynced, laptop);
+  assert.equal(mergeStates(m, cloudBefore).gems, want);
+  assert.equal(mergeStates(mergeStates(m, phone), cloud).gems, want);
+  assert.deepEqual(mergeStates(m, m), m);
+});
+
+test('admin wallet edit: stashes set to 0 while another device used one and bought one offline: 0', () => {
+  const start = legacy(200, 2);
+  const cloud = adminEdit(start, { 'streak.freezes': 0 }, T);
+  const offline = act(act(start, 'phone', { popDays: ['2026-11-08'] }), 'phone', { spend: 50, stashes: 1 });   // used one, bought one: still 2
+  assert.equal(offline.streak.freezes, 2);
+  for (const m of [mergeStates(offline, cloud), mergeStates(cloud, offline)]) {
+    assert.equal(m.streak.freezes, 0);   // 0, then +1 bought and -1 used, both unseen by the admin
+    assert.equal(m.gems, 150);
+  }
+  const bought = act(start, 'phone', { spend: 50, stashes: 1 });   // only bought one (now holds 3)
+  assert.equal(mergeStates(bought, cloud).streak.freezes, 1);
+});
+
+test('admin wallet edit: a later edit replaces an earlier one; a copy with only the first takes the second', () => {
+  const start = legacy(300);
+  const first = adminEdit(start, { gems: 100 }, T);
+  const onFirst = act(mergeStates(start, first), 'phone', { earn: 4 });
+  const second = adminEdit(mergeStates(onFirst, first), { gems: 50 }, T + 1);
+  assert.equal(second.adminEdits.fields.gems.from, 104);
+  const offline = act(onFirst, 'phone', { earn: 6 });         // 6 more the second edit never saw
+  for (const m of [mergeStates(offline, second), mergeStates(second, offline), mergeStates(mergeStates(offline, first), second)]) assert.equal(m.gems, 56);
+});
+
+test('admin wallet edit from before the ledger (no base) still applies to a ledger copy', () => {
+  const start = legacy(300);
+  const old = J(start);
+  old.gems = 5;
+  delete old.wallet;   // the old SQL wrote only the plain number
+  old.adminEdits = { fields: { gems: { at: T, to: 5, from: 300 } }, nodes: {}, courses: {} };
+  const phone = act(start, 'phone', { earn: 7, spend: 2 });   // 305 locally, never saw the edit
+  for (const m of [mergeStates(phone, old), mergeStates(old, phone)]) assert.equal(m.gems, 10);
+  const m = mergeStates(phone, old);
+  assert.deepEqual(mergeStates(m, m), m);
+  assert.equal(mergeStates(m, phone).gems, 10);
 });

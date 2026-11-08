@@ -9,7 +9,10 @@
 //   G.stats.chests             -> releases shipped
 //   path nodes `<unit>:chest:<n>` and G.quests.chest/chestOpened -> release tags and the daily release
 //   G.boostUntil               -> fast-forward (2x XP) end time
-import { loadState, saveState, resetState, freshCourse, STATE_KEY } from '../storage.js';
+// G.gems and G.streak.freezes are read-only mirrors of the ledger in G.wallet (js/wallet.js): change
+// them only through earnGems / spendGems / addStashes / useStashes below.
+import { loadState, saveState, resetState, freshCourse, deviceId, STATE_KEY } from '../storage.js';
+import { record, writeMirrors, balance, stashKey } from '../wallet.js';
 import { ITEMS, itemById } from './cosmetics.js';
 import { CARDS } from '../content/cards.js';
 
@@ -56,6 +59,33 @@ export const MAX_STASHES = 2;
 export const STREAK_MILESTONES = [3, 7, 14, 30, 50, 100];
 const BOOST_MS = 15 * 60 * 1000;
 
+/* --------------------------------------------------------------- wallet */
+// The only places cherries and stashes change. Each adds to a counter in the ledger and re-derives
+// G.gems / G.streak.freezes; none of them saves (the caller does, once).
+function ledger(k, side, key, n) {
+  record(G.wallet[k], side, key, n);
+  writeMirrors(G);
+}
+export function earnGems(n) { if (n > 0) ledger('gems', 'earn', deviceId(), n); }
+// false (and nothing changes) when the balance can't cover it: spending never goes below 0 here.
+export function spendGems(n) {
+  if (!(n > 0)) return true;
+  if (balance(G.wallet.gems) < n) return false;
+  ledger('gems', 'spend', deviceId(), n);
+  return true;
+}
+export function addStashes(n) { if (n > 0) ledger('freezes', 'earn', deviceId(), n); }
+// A popped stash is keyed by the day it covers, not by device: two devices that both pop the same
+// missed day (each on load, before syncing) use one stash between them, not two. The merge also hands
+// back a stash whose day turns out to have been played on another device (see js/wallet.js).
+export function useStashes(days) {
+  if (!days.length) return true;
+  const fresh = days.filter((d) => !G.wallet.freezes.spend[stashKey(d)]);
+  if (balance(G.wallet.freezes) < fresh.length) return false;
+  for (const d of fresh) ledger('freezes', 'spend', stashKey(d), 1);
+  return true;
+}
+
 /* -------------------------------------------------------------- XP / day */
 export const xpToday = () => G.xpByDay[today()] || 0;
 export const boostActive = () => G.boostUntil > Date.now();
@@ -85,9 +115,9 @@ export function applyStreak() {
   const gap = daysBetween(s.lastDay, t);
   if (gap <= 1) return null;
   const missed = gap - 1;
-  if (s.freezes >= missed) {
-    s.freezes -= missed;
-    for (let i = 1; i <= missed; i++) s.frozen.push(addDays(s.lastDay, i));
+  const days = Array.from({ length: missed }, (_, i) => addDays(s.lastDay, i + 1));
+  if (useStashes(days)) {
+    s.frozen.push(...days);
     s.frozen = s.frozen.slice(-30);
     s.lastDay = addDays(t, -1);
     save();
@@ -133,9 +163,8 @@ export function weekDays() {
 }
 
 export function buyStash() {
-  if (G.gems < STASH_COST || G.streak.freezes >= MAX_STASHES) return false;
-  G.gems -= STASH_COST;
-  G.streak.freezes++;
+  if (G.streak.freezes >= MAX_STASHES || !spendGems(STASH_COST)) return false;
+  addStashes(1);
   save();
   return true;
 }
@@ -189,7 +218,7 @@ export function questProgress(kind, value = 1) {
     G.quests.progress[q.id] = next;
     if (prev < q.n && next >= q.n) {
       G.quests.claimed[q.id] = true;
-      G.gems += q.cherries;
+      earnGems(q.cherries);
       questEvents.push({ type: 'quest', quest: q });
     }
   }
@@ -209,7 +238,7 @@ export function shipRelease(seedExtra = '') {
   const roll = r();
   const cherries = roll < 0.5 ? 5 + Math.floor(r() * 8) : roll < 0.85 ? 12 + Math.floor(r() * 10) : 22 + Math.floor(r() * 9);
   const boost = r() < 0.22;
-  G.gems += cherries;
+  earnGems(cherries);
   if (boost) G.boostUntil = Math.max(Date.now(), G.boostUntil) + BOOST_MS;
   G.stats.chests++;
   checkAchievements();
@@ -295,7 +324,7 @@ export function finishLesson({ accuracy, bestCombo }) {
   G.stats.lessons++;
   G.stats.accSum = (G.stats.accSum || 0) + accuracy;
   G.stats.accN = (G.stats.accN || 0) + 1;
-  G.gems += 5;
+  earnGems(5);
   if (accuracy === 1) { G.stats.perfect++; questProgress('perfect'); }
   G.stats.bestCombo = Math.max(G.stats.bestCombo, bestCombo);
   questProgress('lessons');
@@ -368,8 +397,7 @@ export function buyItem(id) {
   if (!it) return { ok: false, reason: 'unknown' };
   if (owns(id)) return { ok: false, reason: 'owned' };
   if (itemLock(id)) return { ok: false, reason: 'locked' };
-  if (G.gems < it.price) return { ok: false, reason: 'cherries' };
-  G.gems -= it.price;
+  if (!spendGems(it.price)) return { ok: false, reason: 'cherries' };
   G.stats.spent = (G.stats.spent || 0) + it.price;
   G.cosmetics.owned[id] = Date.now();
   G.cosmetics.equipped[it.slot] = id;

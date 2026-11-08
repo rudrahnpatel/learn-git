@@ -68,9 +68,10 @@ test('save() while signed in stamps savedAt and pushes (rev+1)', async () => {
 test('another device\'s progress is merged in and the app re-renders', async () => {
   const row = db.rows.get('u1');
   row.state.nodes['b:lesson:y'] = { done: true, crowns: 2, best: 0.9 };
-  row.state.gems = 999; row.rev = 3;
+  const gems = game.G.gems;
+  row.state.wallet.gems.earn.otherdevice = 974; row.state.gems = gems + 974; row.rev = 3;   // earned on another device
   await sync.flush();
-  assert.equal(game.G.gems, 999);
+  assert.equal(game.G.gems, gems + 974);
   assert.ok(game.G.nodes['b:lesson:y'].done && game.G.nodes['a:lesson:x'].done);
   assert.equal(replaced, 1);
   assert.equal(db.rows.get('u1').rev, 3); // nothing new locally: no write
@@ -86,9 +87,35 @@ test('a race on rev is retried and loses nothing', async () => {
   assert.equal(game.G.achievements.other, 5);
 });
 
+test('cherries spent here stay spent when another device\'s older copy syncs (the max(gems) bug)', async () => {
+  const { mergeStates } = await import(pathToFileURL(join(dir, 'js/cloud/merge.js')).href);
+  const { repairState } = await import(pathToFileURL(join(dir, 'js/storage.js')).href);
+  game.earnGems(200); game.save();
+  await sync.flush();
+  const laptop = JSON.parse(JSON.stringify(db.rows.get('u1').state));   // the laptop synced here, then went quiet
+  const gems = game.G.gems, stashes = game.G.streak.freezes;
+  assert.equal(stashes, 0);
+  assert.ok(game.buyStash() && game.buyStash());
+  assert.equal(game.G.gems, gems - 100);
+  const me = store.get('learn-git:device:v1');
+  assert.equal(game.G.wallet.gems.spend[JSON.parse(me)], 100);
+  await sync.flush();
+  // the laptop pushes its stale copy (its own sync merges it with the cloud first)
+  const r = db.rows.get('u1');
+  r.state = mergeStates(repairState(laptop), r.state); r.rev += 1;
+  await sync.flush();
+  for (const s of [game.G, db.rows.get('u1').state]) {
+    assert.equal(s.gems, gems - 100);
+    assert.equal(s.streak.freezes, 2);
+  }
+});
+
 test('reset everywhere wins over an older copy', async () => {
   const before = JSON.parse(JSON.stringify(db.rows.get('u1').state));
+  const device = store.get('learn-git:device:v1');
   await sync.resetEverywhere();
+  // a restarted save gets a new ledger id, so its new spending can't hide behind the old id's counters
+  assert.notEqual(store.get('learn-git:device:v1'), device);
   const r = db.rows.get('u1');
   assert.ok(r.state.resetAt > 0);
   assert.equal(r.state.totalXp, 0);
