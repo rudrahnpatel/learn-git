@@ -77,7 +77,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 window.addEventListener('appinstalled', () => { deferred = null; corner.querySelector('.pwa-install')?.remove(); offerReminder(); });
 
 // ---- streak reminder (opt-in, local only) -------------------------------------------------------------
-// Honest scope: a page cannot wake itself when closed, and there is no server to send push. So this only
+// Honest scope: a page cannot wake itself when closed, and guests have no push subscription. So this only
 // fires while the app is open or installed-and-running (e.g. a background tab or window), at 18:00 or later,
 // once a day, and only if today's goal is not met and there is a streak to lose.
 const R_KEY = 'learn-git:remind';
@@ -85,6 +85,9 @@ const dayKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
 
+// Signed-in players can turn on real push reminders in the account card (js/cloud/push.js). While
+// those are on for this device, this local reminder stays quiet so nobody gets two.
+function pushOn() { try { return !!JSON.parse(lsGet('learn-git:push') || 'null')?.on; } catch { return false; } }
 function streakAtRisk() {
   try {
     const s = JSON.parse(lsGet('learn-git:v2') || 'null');     // read-only peek at the game's own save
@@ -92,7 +95,7 @@ function streakAtRisk() {
   } catch { return false; }
 }
 async function remindTick() {
-  if (lsGet(R_KEY) !== 'on' || Notification.permission !== 'granted') return;
+  if (lsGet(R_KEY) !== 'on' || Notification.permission !== 'granted' || pushOn()) return;
   if (new Date().getHours() < 18 || lsGet(R_KEY + ':last') === dayKey() || !streakAtRisk()) return;
   lsSet(R_KEY + ':last', dayKey());
   const reg = await navigator.serviceWorker?.getRegistration();
@@ -102,7 +105,7 @@ async function remindTick() {
 function offerReminder() {
   if (!('Notification' in window) || corner.querySelector('.pwa-remind')) return;
   if (lsGet(R_KEY) === 'on' && Notification.permission === 'granted') { setInterval(remindTick, 5 * 60 * 1000); remindTick(); return; }
-  if (!standalone() || Notification.permission !== 'default' || lsGet(R_KEY) === 'no') return;
+  if (!standalone() || Notification.permission !== 'default' || lsGet(R_KEY) === 'no' || pushOn()) return;
   const b = $('button', { type: 'button', class: 'pwa-pill pwa-remind', text: 'Remind me to practise' });
   b.addEventListener('click', async () => {
     const p = await Notification.requestPermission().catch(() => 'denied');

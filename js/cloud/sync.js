@@ -13,6 +13,7 @@ import { repairState } from '../storage.js';
 import { mergeStates, sameState } from './merge.js';
 import { AUTH_STORAGE_KEY } from './config.js';
 import { cloudConfigured, hasStoredSession, isAuthReturn, cleanAuthParams, getClient, signInWithGoogle, profileOf } from './client.js';
+import { reconcileReminders, forgetDevice } from './push.js';
 
 const PUSH_DELAY = 3000;          // ms after the last save
 const MAX_TRIES = 4;              // optimistic-concurrency retries per flush
@@ -81,7 +82,7 @@ async function doConnect() {
   sb.auth.onAuthStateChange((event, s) => {
     // Never await Supabase calls inside this callback (supabase-js holds a lock while it runs).
     setTimeout(() => {
-      if (event === 'SIGNED_OUT') { if (user) ended(); return; }
+      if (event === 'SIGNED_OUT') { if (user) { ended(); forgetDevice({ server: false }).catch(() => {}); } return; }
       if (s?.user && (!user || user.id !== s.user.id)) begin(s.user, true);
       else if (s?.user) { user = s.user; set({ user: profileOf(user) }); }
     }, 0);
@@ -101,6 +102,7 @@ async function begin(u, fresh) {
   // No savedAt stamp here: a device that never synced has none, so on a first sign-in the
   // cloud copy's settings (goal, outfit, ...) win over this device's defaults.
   await flush();
+  reconcileReminders(u.id).catch((e) => console.warn('[push] reconcile', e));   // push reminders on this device
   if (fresh) hooks.onSignedIn(profileOf(u));
 }
 function ended() {
@@ -204,6 +206,7 @@ export async function signIn() {
 export async function signOut() {
   if (!sb || !user) return;
   if (dirty) { try { await flush(); } catch { /* keep going */ } }
+  await forgetDevice();   // this browser stops getting the account's reminders (needs the session, so first)
   try { await sb.auth.signOut({ scope: 'local' }); } catch (e) { console.warn(e); }
   dropLocalSession();
   ended();
@@ -214,6 +217,7 @@ export async function deleteAccount() {
   if (!sb || !user) throw new Error('Not signed in.');
   const { error } = await sb.rpc('delete_my_account');
   if (error) throw error;
+  await forgetDevice({ server: false });   // the push_subscriptions rows went with the account
   try { await sb.auth.signOut({ scope: 'local' }); } catch { /* the user is gone already */ }
   dropLocalSession();
   ended();
