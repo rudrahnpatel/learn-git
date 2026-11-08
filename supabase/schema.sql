@@ -527,7 +527,7 @@ create policy "events: insert" on public.events
   for insert to anon, authenticated
   with check (
     name in ('landing_view', 'app_open', 'onboarding_step', 'onboarding_done', 'lesson_start', 'lesson_done',
-             'lesson_quit', 'exercise_answer', 'challenge_start', 'challenge_done', 'milestone', 'sign_in')
+             'lesson_quit', 'exercise_answer', 'challenge_start', 'challenge_done', 'milestone', 'sign_in', 'course_switch')
     and (device is null or device in ('phone', 'tablet', 'desktop'))
     and jsonb_typeof(props) = 'object'
     and octet_length(props::text) <= 1024

@@ -1,14 +1,15 @@
 // Home: the winding path of nodes, unit banners, Twig, and the side column (quests, streak
 // week, practice entry, achievements).
 import { h, announce } from '../dom.js';
-import { APP, REWARDS } from '../brand.js';
-const CUR = REWARDS.currency, FRZ = REWARDS.freeze, cap = (t) => t[0].toUpperCase() + t.slice(1);
+import { APP, REWARDS, say } from '../brand.js';
+const cap = (t) => t[0].toUpperCase() + t.slice(1);
 import { sfx } from '../sound.js';
 import { twig } from './twig.js';
 import { ICON, setShapes, toast, shake, accent, flyUp, glide } from './fx.js';
 import { topbar } from './topbar.js';
 import { commitLine, releaseOverlay } from './complete.js';
 import { UNITS, nodes, nodeStatus, crowns, unitProgress, currentNode, contentSource } from './path.js';
+import { coursePill } from './settings.js';
 import * as game from './game.js';
 import { resetProgress, privacyLine } from './account.js';
 
@@ -19,20 +20,22 @@ const dailyTag = (day) => 'v' + day.slice(2).replace(/-/g, '.');
 
 function twigLine(msg) {
   if (msg) return msg;
-  const s = game.shownStreak();
-  if (game.boostActive()) return `Fast-forward is on: 2× XP for ${game.boostLeftMin()} more min. Go go go!`;
-  if (game.doneToday()) return s > 1 ? `Day ${s}! Today's commit is in. Fancy a bonus round?` : 'Today\'s commit is in. Look at you.';
+  const s = game.shownStreak(), T = REWARDS.twig;
+  if (game.boostActive()) return T.boost(game.boostLeftMin());
+  if (game.doneToday()) return s > 1 ? T.doneMany(s) : T.doneOne;
   const left = game.G.goal - game.xpToday();
-  if (game.xpToday() > 0) return `${left} XP until today's commit lands. ${s ? 'Don\'t break the line!' : 'Start your history!'}`;
-  if (s > 0) return `Day ${s} of your history. One lesson commits today.`;
-  if (!game.G.totalXp) return 'Tap START. A lesson takes about three minutes.';
-  return 'New day, clean working tree. Shall we?';
+  if (game.xpToday() > 0) return T.partial(left, s);
+  if (s > 0) return T.day(s);
+  if (!game.G.totalXp) return T.fresh;
+  return T.idle;
 }
 
 export function renderHome(root, { message = null, popNode = null, refresh } = {}) {
   const rerender = (o = {}) => refresh(o);
   setShapes('home');
   document.title = APP.name;
+  const CUR = REWARDS.currency, FRZ = REWARDS.freeze, tagged = REWARDS.crate.tagged;
+  const placement = game.courseProgress().placement || 0;
   const cur = currentNode();
   let popover = null, opener = null;
   // refocus: put the focus back on the node that opened it (Escape, or Tab leaving the popover)
@@ -45,14 +48,14 @@ export function renderHome(root, { message = null, popNode = null, refresh } = {
 
   /* ---------------------------------------------------------------- path */
   // the path is the page's main content; its heading is for screen readers (the banners carry the visual titles)
-  const pathCol = h('main', { class: 'path-col', 'aria-labelledby': 'path-h' }, h('h1', { class: 'sr-only', id: 'path-h' }, 'Your learning path'));
+  const pathCol = h('main', { class: 'path-col', 'aria-labelledby': 'path-h' }, h('h1', { class: 'sr-only', id: 'path-h' }, 'Your learning path'), coursePill());
   let k = 0;
   for (const unit of UNITS) {
     const prog = unitProgress(unit);
     const ui = UNITS.indexOf(unit);
     pathCol.append(h('section', { class: `unit-banner`, style: { background: accent(unit.color) } },
       h('div', {},
-        h('span', { class: 'mono tiny' }, `UNIT ${ui + 1}${ui < game.G.placement ? ' · SKIPPED, STILL PLAYABLE' : ''}`),
+        h('span', { class: 'mono tiny' }, `UNIT ${ui + 1}${ui < placement ? ' · SKIPPED, STILL PLAYABLE' : ''}`),
         h('h2', {}, unit.title),
         unit.blurb ? h('p', {}, unit.blurb) : null),
       h('span', { class: 'unit-prog mono' }, `${prog.done}/${prog.total}`)));
@@ -64,14 +67,14 @@ export function renderHome(root, { message = null, popNode = null, refresh } = {
       const cr = n.kind === 'lesson' ? crowns(n) : 0;
       const btn = h('button', {
         class: `pnode k-${n.kind} s-${st}`, type: 'button', style: { '--fill': accent(unit.color) },
-        'aria-label': n.kind === 'release' ? `Reward crate, release ${n.version}, ${st === 'done' ? 'opened' : st}` : `${n.title}, ${st}`,
+        'aria-label': n.kind === 'release' ? `Reward crate${tagged ? `, release ${n.version}` : ''}, ${st === 'done' ? 'opened' : st}` : `${n.title}, ${st}`,
         html: st === 'locked' && n.kind !== 'release' ? ICON.lock() : st === 'done' && n.kind === 'release' ? ICON.crate(true) : st === 'done' && n.kind === 'lesson' ? ICON.check() : KIND_ICON[n.kind](),
         onclick: (e) => { e.stopPropagation(); clickNode(n, st, btn); },
       });
       const wrap = h('div', { class: 'node-wrap' }, btn,
         cr ? h('span', { class: 'crowns', title: `${cr} crown${cr > 1 ? 's' : ''}` }, h('span', { html: ICON.crown() }), String(cr)) : null,
         // the version hangs off the crate as a small git tag: the reward first, the git flavour second
-        n.kind === 'release' ? h('span', { class: 'tag-ver', 'aria-hidden': 'true' }, h('span', { class: 'tag-ver-t mono' }, n.version)) : null);
+        n.kind === 'release' && tagged ? h('span', { class: 'tag-ver', 'aria-hidden': 'true' }, h('span', { class: 'tag-ver-t mono' }, n.version)) : null);
       if (st === 'current') wrap.prepend(h('button', { class: 'start-bubble mono', type: 'button', onclick: (e) => { e.stopPropagation(); start(n); } }, n.kind === 'release' ? 'OPEN' : 'START'));
       const row = h('div', { class: 'path-row', style: { '--x': x }, 'data-node': n.id }, wrap);
       if (st === 'current') {
@@ -88,15 +91,20 @@ export function renderHome(root, { message = null, popNode = null, refresh } = {
 
   function clickNode(n, st, btn) {
     sfx.tap();
-    if (st === 'locked') { shake(btn); toast('Finish the nodes before this one first.', { icon: ICON.lock() }); return; }
+    if (st === 'locked') {
+      shake(btn);
+      // with "Unlock all levels" only a crate can still be locked: its lessons come first
+      toast(game.G.unlockAll && n.kind === 'release' ? 'Finish the lessons before this crate to open it.' : 'Finish the nodes before this one first.', { icon: ICON.lock() });
+      return;
+    }
     closePop();
     const label = { lesson: 'LESSON', release: 'PATH REWARD', challenge: 'CHALLENGE', review: 'UNIT REVIEW' }[n.kind];
     const done = st === 'done';
     const meta = n.kind === 'lesson' ? (crowns(n) ? `${crowns(n)} crown${crowns(n) > 1 ? 's' : ''} · replays are shuffled` : `${n.lesson.exercises.length} exercises · about 3 min`)
       : n.kind === 'challenge' ? 'A live repo puzzle. Stars become XP.'
       : n.kind === 'review' ? '10 exercises from this unit, shuffled.'
-      : `Release ${n.version} · ${CUR.many} inside, and sometimes a ${REWARDS.boost.name.toLowerCase()}.`;
-    if (n.kind === 'release' && done) { toast(`Crate ${n.version} already opened. Onwards!`, { icon: ICON.crate(true) }); return; }
+      : tagged ? `Release ${n.version} · ${CUR.many} inside, and sometimes ${REWARDS.boost.a}.` : `${cap(CUR.many)} inside, and sometimes ${REWARDS.boost.a}.`;
+    if (n.kind === 'release' && done) { toast(tagged ? `Crate ${n.version} already opened. Onwards!` : 'Crate already opened. Onwards!', { icon: ICON.crate(true) }); return; }
     const go = h('button', { class: 'btn primary', type: 'button', onclick: () => start(n) },
       n.kind === 'release' ? 'Open crate' : done ? (n.kind === 'challenge' ? 'Play again' : 'Practice again +XP') : `Start +${n.kind === 'challenge' ? '20' : '10'} XP`, h('span', { class: 'arr' }, ' →'));
     popover = h('div', { class: 'popover card', role: 'dialog', 'aria-label': n.title, onclick: (e) => e.stopPropagation() },
@@ -120,7 +128,7 @@ export function renderHome(root, { message = null, popNode = null, refresh } = {
   async function start(n) {
     closePop();
     if (n.kind === 'release') {
-      const reward = await releaseOverlay({ version: n.version, from: n.prevVersion, seed: n.id });
+      const reward = await releaseOverlay({ version: n.version, from: n.prevVersion, seed: n.id, label: tagged ? undefined : 'PATH REWARD' });
       if (reward) game.completeNode(n.id);
       rerender({ popNode: currentNode()?.id });
       refocus(`[data-node="${CSS.escape(n.id)}"] .pnode`);
@@ -137,7 +145,7 @@ export function renderHome(root, { message = null, popNode = null, refresh } = {
   const questCard = h('section', { class: 'card side-card quests' },
     h('div', { class: 'card-head' }, h('h3', {}, 'Daily quests'), h('span', { class: 'mono tiny' }, 'NEW ONES AT MIDNIGHT')),
     qs.map((q) => h('div', { class: 'quest' + (q.done ? ' done' : '') },
-      h('div', { class: 'q-top' }, h('span', {}, q.text), h('span', { class: 'q-cherries' }, h('span', { html: CUR.icon() }), String(q.cherries), h('span', { class: 'sr-only' }, ` ${CUR.many}${q.done ? ', done' : ''}`))),
+      h('div', { class: 'q-top' }, h('span', {}, say(q.text)), h('span', { class: 'q-cherries' }, h('span', { html: CUR.icon() }), String(q.cherries), h('span', { class: 'sr-only' }, ` ${CUR.many}${q.done ? ', done' : ''}`))),
       h('div', { class: 'qbar' }, h('div', { class: 'qbar-fill', style: { width: `${(q.progress / q.n) * 100}%` } }), h('span', { class: 'qbar-n mono' }, `${q.progress}/${q.n}`)))),
     h('div', { class: 'daily-release' + (releaseReady ? ' ready' : '') },
       h('span', { class: 'dr-ic' + (releaseReady ? ' ready' : ''), html: ICON.crate(!!game.G.quests.chestOpened) }),
@@ -154,22 +162,22 @@ export function renderHome(root, { message = null, popNode = null, refresh } = {
     'aria-label': stashFull ? `${cap(FRZ.many)} full` : `${FRZ.verb} for ${CUR.count(game.STASH_COST)}`,
     onclick: () => {
       if (!game.buyStash()) return;
-      sfx.stash(); toast('Streak stashed. It pops itself if you miss a day.', { icon: FRZ.icon() }); rerender(); refocus(['.stash-btn:not(:disabled)', '.streak-card .streak-n'], true);
+      sfx.stash(); toast(FRZ.bought, { icon: FRZ.icon() }); rerender(); refocus(['.stash-btn:not(:disabled)', '.streak-card .streak-n'], true);
       flyUp(document.querySelector('.stash-row .stashes'), `−${game.STASH_COST}`, 'cherry', { icon: CUR.icon() });
       const fz = document.querySelectorAll('.fz.on'); fz[fz.length - 1]?.classList.add('fresh');
     } },
     stashFull ? `${cap(FRZ.many)} full` : h('span', {}, `${FRZ.verb} · `, h('span', { class: 'inline-ic', html: CUR.icon() }), String(game.STASH_COST)));
   const streakCard = h('section', { class: 'card side-card streak-card' },
     h('div', { class: 'streak-row' },
-      h('span', { class: 'commit-big', html: ICON.commit(s > 0) }),
+      h('span', { class: 'commit-big', html: REWARDS.streak.icon(s > 0) }),
       h('div', {}, h('div', { class: 'streak-n' }, String(s)), h('span', { class: 'mono tiny' }, 'DAY STREAK'))),
-    h('p', { class: 'muted' }, game.doneToday() ? 'Today\'s commit is in. See you tomorrow!' : `Earn ${Math.max(0, game.G.goal - game.xpToday())} more XP to commit today and ${s ? 'grow' : 'start'} your streak.`),
+    h('p', { class: 'muted' }, game.doneToday() ? `${REWARDS.day.done}. See you tomorrow!` : `Earn ${Math.max(0, game.G.goal - game.xpToday())} more XP to ${REWARDS.day.verb} and ${s ? 'grow' : 'start'} your streak.`),
     commitLine(),
     h('div', { class: 'stash-row' },
       h('span', { class: 'stashes' }, Array.from({ length: game.MAX_STASHES }, (_, i) => h('span', { class: 'fz' + (i < game.G.streak.freezes ? ' on' : ''), html: FRZ.icon() })), h('span', { class: 'muted' }, ` ${game.G.streak.freezes}/${game.MAX_STASHES} ${FRZ.many}`)),
       stashBtn));
 
-  const mistakes = Object.keys(game.G.mistakes).length;
+  const mistakes = game.mistakeCount();
   const practiceCard = h('a', { class: 'card side-card practice-entry', href: '#/practice' },
     h('span', { class: 'round-ic', html: ICON.dumbbell() }),
     h('div', {}, h('h3', {}, 'Practice hub'), h('p', {}, mistakes ? `${mistakes} mistake${mistakes > 1 ? 's' : ''} to review, plus speed round, bisect hunt and sandbox.` : 'Speed round, bisect hunt and the sandbox.')),
@@ -184,7 +192,7 @@ export function renderHome(root, { message = null, popNode = null, refresh } = {
         h('span', { class: 'sr-only' }, `${got ? ', earned' : ', locked'}: ${a.text}`));
     })));
 
-  const boost = game.boostActive() ? h('div', { class: 'boost-banner', role: 'status' }, h('span', { class: 'ff-ic', html: ICON.ff() }), h('span', {}, 'Fast-forward · 2× XP · ', h('span', { class: 'mono' }, `${game.boostLeftMin()} min left`))) : null;
+  const boost = game.boostActive() ? h('div', { class: 'boost-banner', role: 'status' }, h('span', { class: 'ff-ic', html: REWARDS.boost.icon() }), h('span', {}, `${REWARDS.boost.banner} · `, h('span', { class: 'mono' }, `${game.boostLeftMin()} min left`))) : null;
 
   const footer = h('footer', { class: 'foot' },
     h('p', {}, privacyLine()),
@@ -227,5 +235,5 @@ function refocus(sel, quiet = false) {
 
 // "+12" cherries dropping out of the top bar after a crate is opened.
 function pickFlyUp(n) {
-  requestAnimationFrame(() => flyUp(document.querySelector('.stat.cherries'), `+${n}`, 'cherry', { icon: CUR.icon(), down: true }));
+  requestAnimationFrame(() => flyUp(document.querySelector('.stat.cherries'), `+${n}`, 'cherry', { icon: REWARDS.currency.icon(), down: true }));
 }

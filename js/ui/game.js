@@ -178,9 +178,10 @@ const QUEST_POOL = [
   { id: 'xp20', kind: 'xp', n: 20, text: 'Earn 20 XP', cherries: 5 },
   { id: 'combo8', kind: 'combo', n: 8, text: 'Get 8 right in a row', cherries: 10 },
   { id: 'combo5', kind: 'combo', n: 5, text: 'Get 5 right in a row', cherries: 5 },
-  { id: 'perfect', kind: 'perfect', n: 1, text: 'Merge a lesson with zero mistakes', cherries: 10 },
-  { id: 'lessons2', kind: 'lessons', n: 2, text: 'Merge 2 lessons', cherries: 10 },
-  { id: 'lessons3', kind: 'lessons', n: 3, text: 'Merge 3 lessons', cherries: 15 },
+  // {Finish} is the course's word for finishing a lesson ("Merge" in git): screens fill it in with say() (js/brand.js)
+  { id: 'perfect', kind: 'perfect', n: 1, text: '{Finish} a lesson with zero mistakes', cherries: 10 },
+  { id: 'lessons2', kind: 'lessons', n: 2, text: '{Finish} 2 lessons', cherries: 10 },
+  { id: 'lessons3', kind: 'lessons', n: 3, text: '{Finish} 3 lessons', cherries: 15 },
   { id: 'challenge', kind: 'challenge', n: 1, text: 'Complete a challenge', cherries: 15 },
   { id: 'review5', kind: 'review', n: 5, text: 'Fix 5 old mistakes', cherries: 10 },
   { id: 'type3', kind: 'typed', n: 3, text: 'Type 3 commands right', cherries: 10 },
@@ -249,13 +250,17 @@ export function shipRelease(seedExtra = '') {
 }
 
 /* ------------------------------------------------------------ path nodes */
-export const nodeState = (id) => G.nodes[id] || null;
+// Path nodes belong to the active course (courseProgress().nodes).
+export const nodeState = (id) => courseProgress().nodes[id] || null;
 export function completeNode(id, { accuracy = 1 } = {}) {
-  const prev = G.nodes[id] || { done: false, crowns: 0, best: 0 };
-  G.nodes[id] = { done: true, crowns: Math.min(5, prev.crowns + 1), best: Math.max(prev.best || 0, accuracy) };
+  const nodes = courseProgress().nodes;
+  const prev = nodes[id] || { done: false, crowns: 0, best: 0 };
+  nodes[id] = { done: true, crowns: Math.min(5, prev.crowns + 1), best: Math.max(prev.best || 0, accuracy) };
   save();
-  return { crowns: G.nodes[id].crowns, first: !prev.done };
+  return { crowns: nodes[id].crowns, first: !prev.done };
 }
+// Challenges are the v1 git levels (js/levels.js), so they always belong to the git course (G.challenges),
+// even when one is replayed from the practice hub while another course is active.
 export function completeChallenge(levelId, stars) {
   const prev = G.challenges[levelId];
   G.challenges[levelId] = { stars: Math.max(stars, prev?.stars || 0) };
@@ -267,20 +272,24 @@ export function completeChallenge(levelId, stars) {
 }
 
 /* -------------------------------------------------------------- mistakes */
+// The deck is the active course's: its keys are exercise ids from that course's content.
 const BOX_DAYS = [0, 1, 3, 7];
+const deckOf = () => courseProgress().mistakes;
 export function recordMistake(key) {
   if (!key) return;
-  const m = G.mistakes[key] || { box: 0, misses: 0 };
+  const mistakes = deckOf();
+  const m = mistakes[key] || { box: 0, misses: 0 };
   m.box = 0; m.misses++; m.due = Date.now();
-  G.mistakes[key] = m;
+  mistakes[key] = m;
   save();
 }
 export function reviewResult(key, ok) {
-  const m = G.mistakes[key];
+  const mistakes = deckOf();
+  const m = mistakes[key];
   if (!m) return;
   if (ok) {
     m.box++;
-    if (m.box >= BOX_DAYS.length) delete G.mistakes[key];
+    if (m.box >= BOX_DAYS.length) delete mistakes[key];
     else m.due = Date.now() + BOX_DAYS[m.box] * 86400000;
     G.stats.reviewed++;
     questProgress('review');
@@ -289,9 +298,10 @@ export function reviewResult(key, ok) {
   save();
 }
 export function mistakeKeys() {
-  return Object.entries(G.mistakes).sort((a, b) => a[1].due - b[1].due).map(([k]) => k);
+  return Object.entries(deckOf()).sort((a, b) => a[1].due - b[1].due).map(([k]) => k);
 }
-export const mistakesDue = () => Object.values(G.mistakes).filter((m) => m.due <= Date.now()).length;
+export const mistakeCount = () => Object.keys(deckOf()).length;
+export const mistakesDue = () => Object.values(deckOf()).filter((m) => m.due <= Date.now()).length;
 
 /* ---------------------------------------------------------- achievements */
 export const ACHIEVEMENTS = [
@@ -334,6 +344,8 @@ export function finishLesson({ accuracy, bestCombo }) {
   save();
 }
 export function setMute(m) { G.mute = m; save(); }
+// Settings: "Unlock all levels" (see nodeStatus in js/ui/path.js). It changes what is open, never progress.
+export function setUnlockAll(on) { G.unlockAll = !!on; save(); }
 export function recordSpeedScore(score) {
   const best = score > (G.stats.speedBest || 0);
   if (best) G.stats.speedBest = score;
@@ -352,11 +364,32 @@ export function recordBisectScore(tests) {
 }
 
 /* ---------------------------------------------------- courses (per-course data) */
-// Per-course state lives in G.courses[<id>]; the active course is G.course ('git' today).
+// Per-course state lives in G.courses[<id>]; the active course is G.course.
 export const courseId = () => G.course || 'git';
 export function courseState(id = courseId()) {
   if (!G.courses[id]) G.courses[id] = freshCourse();
   return G.courses[id];
+}
+// A course's path progress: { nodes, challenges, mistakes, placement }. The git course predates the
+// course-aware layer, so its copy is the top level of G (old saves load untouched); every other course
+// keeps its own under G.courses[<id>], filled in on first use.
+export const GIT_COURSE = 'git';
+export function courseProgress(id = courseId()) {
+  if (id === GIT_COURSE) return G;
+  const c = courseState(id);
+  for (const k of ['nodes', 'challenges', 'mistakes']) if (!c[k] || typeof c[k] !== 'object') c[k] = {};
+  if (typeof c.placement !== 'number') c.placement = 0;
+  return c;
+}
+// Lessons done in a course (its path's lesson nodes), for the course switcher.
+export const lessonsDone = (id = courseId()) => Object.entries(courseProgress(id).nodes).filter(([k, n]) => n?.done && k.includes(':lesson:')).length;
+// Switches the active course. Every course's progress stays where it is; nothing is copied or reset.
+export function setCourse(id) {
+  if (!id || id === courseId()) return false;
+  G.course = id;
+  courseProgress(id);
+  save();
+  return true;
 }
 
 /* --------------------------------------------------------------- command cards */

@@ -1829,3 +1829,66 @@ body[data-screen="lesson"] .toast { top: auto; bottom: calc(var(--foot-h, 100px)
 .speed-form:has(.speed-in:focus-visible) { outline: 2px solid var(--iris-text); outline-offset: 2px; }
 /* a graded graph option keeps its ring when focused (the right/wrong `outline: 0` rules would remove it) */
 .opt.graph-opt.right:focus-visible, .opt.graph-opt.wrong:focus-visible { outline: 2px solid var(--iris-text); outline-offset: 2px; }
+
+/* ------------------------------------------------------------ settings + course switcher
+   (.notes/settings-and-course-switcher.md). Theme tokens only, so both themes follow. */
+.icon-btn.round.gear svg { width: 22px; height: 22px; }
+@media (max-width: 760px) { .icon-btn.round.gear { width: 40px; height: 40px; } }
+.settings { display: grid; gap: 20px; }
+.set-sec { display: grid; gap: 10px; }
+.set-sec > h3 { color: var(--mute); }
+.set-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; border: 1px solid var(--frost); border-radius: 16px; background: var(--paper); }
+.set-text { display: grid; gap: 4px; min-width: 0; cursor: pointer; }
+.course-row .set-text { cursor: default; }
+.set-label { font-size: 17px; color: var(--ink); }
+.set-desc { font-size: 14px; line-height: 1.35; color: var(--mute); }
+.set-course { display: inline-flex; align-items: center; gap: 8px; font-size: 15px; color: var(--mute); }
+/* an on/off switch: a native checkbox (role=switch) drawn as a pill */
+.switch { appearance: none; -webkit-appearance: none; flex: none; position: relative; width: 48px; height: 28px; margin: 0; border-radius: 48px; background: var(--frost-2); border: 1px solid var(--frost-2); cursor: pointer; transition: background .15s; }
+.switch::before { content: ""; position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; border-radius: 50%; background: var(--paper); box-shadow: 0 2px 0 0 var(--shadow); transition: transform .2s var(--spring); }
+.switch:checked { background: var(--iris); border-color: var(--iris); }
+.switch:checked::before { transform: translateX(20px); }
+.switch:focus-visible { outline: 2px solid var(--iris-text); outline-offset: 3px; }
+@media (forced-colors: active) { .switch { border: 1px solid CanvasText; } .switch::before { background: CanvasText; } }
+/* the theme picker: three radios as one segmented row of pills */
+.seg { border: 0; margin: 0; padding: 0; min-width: 0; }
+.seg legend { padding: 0; margin-bottom: 8px; }
+.seg-opts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.seg-opt { position: relative; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 8px 10px; border-radius: 48px; background: var(--frost); color: var(--ink); cursor: pointer; font-size: 15px; }
+.seg-opt input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; margin: 0; cursor: pointer; }
+.seg-opt:has(input:checked) { background: var(--iris); color: var(--on-iris); }
+.seg-opt:has(input:focus-visible) { outline: 2px solid var(--iris-text); outline-offset: 2px; }
+.seg-ic svg { width: 18px; height: 18px; display: block; }
+/* course icons on their accent fill */
+.course-ic { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; color: var(--on-accent); flex: none; }
+.course-ic svg { width: 24px; height: 24px; display: block; }
+.course-ic.small { width: 28px; height: 28px; }
+.course-ic.small svg { width: 16px; height: 16px; }
+/* the home course pill, above the first unit banner */
+.course-pill { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; min-height: 44px; padding: 6px 12px 6px 8px; border-radius: 48px; border: 1px solid var(--frost); background: var(--paper); color: var(--ink); box-shadow: 0 2px 0 0 var(--shadow); font: 400 17px/1.2 var(--sans); cursor: pointer; transition: transform .08s, box-shadow .08s; }
+.course-pill:active { transform: translateY(2px); box-shadow: none; }
+.cp-t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.cp-n { font-size: 12px; color: var(--mute); }
+.cp-chev svg { width: 18px; height: 18px; display: block; }
+.path-col > .course-pill { align-self: flex-start; }
+/* the switcher sheet */
+.course-note { margin: 0 0 14px; font-size: 15px; }
+.course-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.course-opt { width: 100%; display: flex; align-items: center; gap: 14px; text-align: left; padding: 14px; border-radius: 20px; border: 1px solid var(--frost); background: var(--paper); color: var(--ink); font: inherit; cursor: pointer; box-shadow: 0 2px 0 0 var(--shadow); }
+.course-opt.current { border: 2px solid var(--iris); padding: 13px; }
+.course-opt.soon { cursor: default; box-shadow: none; background: var(--chalk); }
+.course-opt.soon .course-ic { opacity: .55; }
+.course-txt { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.course-t { font-size: 18px; }
+.course-b { font-size: 14px; line-height: 1.35; color: var(--mute); }
+.course-meta { display: grid; justify-items: end; gap: 4px; flex: none; }
+.course-meta .tag-pill { font-size: 11px; padding: 2px 10px; white-space: nowrap; }
+.course-meta .tag-pill.on { background: var(--iris); color: var(--on-iris); }
+.course-meta .mono.tiny { color: var(--mute); white-space: nowrap; }
+.practice-sub { margin: 32px 0 16px; }
+@media (max-width: 420px) {
+  .course-opt { flex-wrap: wrap; gap: 10px 12px; }
+  .course-meta { justify-items: start; grid-auto-flow: column; align-items: center; width: 100%; padding-left: 56px; }
+  .set-row { padding: 12px 14px; }
+  .seg-opt { font-size: 14px; padding: 8px 6px; gap: 6px; }
+}

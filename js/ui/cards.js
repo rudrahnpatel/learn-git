@@ -7,7 +7,7 @@ import { ICON, setShapes, confetti, reducedMotion } from './fx.js';
 import { twig, twigSVG } from './twig.js';
 import { topbar } from './topbar.js';
 import { UNITS } from './path.js';
-import { APP } from '../brand.js';
+import { APP, say } from '../brand.js';
 import { CARDS, RARITIES } from '../content/cards.js';
 import * as game from './game.js';
 
@@ -92,10 +92,10 @@ export function renderCards(root) {
     empty.classList.toggle('hidden', shown > 0);
   }
   draw();
-  const line = got === 0 ? 'Merge a lesson to win your first card!' : got === total ? 'Every card! You are a walking cheat sheet.' : `${got} of ${total}. Tap a card to see an example and the classic slip.`;
+  const line = total === 0 ? 'No command cards for this course yet. They are on the way!' : got === 0 ? say('{Finish} a lesson to win your first card!') : got === total ? 'Every card! You are a walking cheat sheet.' : `${got} of ${total}. Tap a card to see an example and the classic slip.`;
   root.replaceChildren(topbar('cards'), h('main', { class: 'cards-page' },
     h('div', { class: 'practice-head cards-head' },
-      h('div', {}, h('span', { class: 'mono tiny' }, 'COMMAND CARDS'), h('h1', {}, 'Your cheat sheet'), h('p', { class: 'lede' }, 'One card per command. Merge a lesson to unlock its cards.')),
+      h('div', {}, h('span', { class: 'mono tiny' }, 'COMMAND CARDS'), h('h1', {}, 'Your cheat sheet'), h('p', { class: 'lede' }, say('One card per command. {Finish} a lesson to unlock its cards.'))),
       twig({ mood: got ? 'happy' : 'think', size: 100, text: line, side: 'left' }).el),
     h('div', { class: 'card-tools' }, pills, h('div', { class: 'card-search-row' }, search, ownedToggle)),
     empty, grid));
