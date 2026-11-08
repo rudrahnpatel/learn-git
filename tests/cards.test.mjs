@@ -1,13 +1,16 @@
 // Command cards (js/content/cards.js): every card is well formed, every unlockedBy lesson exists,
 // and every lesson unlocks at least one card. Run: node tests/cards.test.mjs
-import { UNITS } from '../js/content/index.js';
-import { CARDS, RARITIES, COURSE } from '../js/content/cards.js';
+import { UNITS as GIT_UNITS } from '../js/content/index.js';
+import { UNITS as BASH_UNITS } from '../js/content/bash/index.js';
+import { CARDS, RARITIES, COURSE_META } from '../js/content/cards.js';
 
 let failures = 0;
 const fail = (msg) => { failures++; console.error('FAIL ' + msg); };
 
-const lessons = new Map();
-for (const u of UNITS) for (const l of u.lessons) lessons.set(l.id, { unit: u.id, lesson: l });
+// every course with a deck: its units, and the lessons that may unlock its cards
+const COURSE_UNITS = { git: GIT_UNITS, bash: BASH_UNITS };
+const lessons = new Map();   // "course/lesson" -> { unit }
+for (const [course, units] of Object.entries(COURSE_UNITS)) for (const u of units) for (const l of u.lessons) lessons.set(`${course}/${l.id}`, { unit: u.id, lesson: l, course });
 
 const ids = new Set();
 for (const card of CARDS) {
@@ -17,18 +20,18 @@ for (const card of CARDS) {
   }
   if (ids.has(card.id)) fail(`${where}: duplicate id`);
   ids.add(card.id);
-  if (card.course !== COURSE.id) fail(`${where}: course "${card.course}" is not "${COURSE.id}"`);
+  if (!COURSE_META[card.course] || COURSE_META[card.course].id !== card.course) fail(`${where}: course "${card.course}" has no COURSE_META entry`);
   if (!RARITIES.includes(card.rarity)) fail(`${where}: rarity "${card.rarity}" not in ${RARITIES.join('|')}`);
   if (!Array.isArray(card.unlockedBy) || !card.unlockedBy.length) fail(`${where}: unlockedBy must list at least one lesson`);
-  for (const id of card.unlockedBy || []) if (!lessons.has(id)) fail(`${where}: unlockedBy "${id}" is not a lesson in js/content/index.js`);
+  for (const id of card.unlockedBy || []) if (!lessons.has(`${card.course}/${id}`)) fail(`${where}: unlockedBy "${id}" is not a lesson of the ${card.course} course`);
   if (/<[a-z]/i.test(card.what + card.mistake)) fail(`${where}: what/mistake are plain text (no HTML)`);
 }
 
-for (const [id, { unit }] of lessons) {
-  if (!CARDS.some((c) => c.unlockedBy.includes(id))) fail(`lesson ${id} (unit ${unit}) unlocks no card`);
+for (const [key, { unit, course, lesson }] of lessons) {
+  if (!CARDS.some((c) => c.course === course && c.unlockedBy.includes(lesson.id))) fail(`lesson ${key} (unit ${unit}) unlocks no card`);
 }
-for (const u of UNITS) if (!COURSE.ready[u.id]) fail(`unit ${u.id} has no COURSE.ready label (share card)`);
+for (const [course, units] of Object.entries(COURSE_UNITS)) for (const u of units) if (!COURSE_META[course].ready[u.id]) fail(`${course} unit ${u.id} has no ready label (share card)`);
 
 const byRarity = RARITIES.map((r) => `${r} ${CARDS.filter((c) => c.rarity === r).length}`).join(', ');
 if (failures) { console.error(`\n${failures} card check(s) failed`); process.exit(1); }
-console.log(`cards: ${CARDS.length} cards (${byRarity}) over ${lessons.size} lessons in ${UNITS.length} units: ok`);
+console.log(`cards: ${CARDS.length} cards (${byRarity}) over ${lessons.size} lessons in ${Object.keys(COURSE_UNITS).length} courses: ok`);

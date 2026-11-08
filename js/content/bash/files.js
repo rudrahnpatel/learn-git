@@ -1,0 +1,412 @@
+// Bash unit 2: Files and folders. touch/mkdir, cp/mv, rm, wildcards, names with spaces and braces.
+import { home, exists, isDir, isFile, fileIs, fileHas, listOf, cwdIs } from './helpers.js';
+
+// A messy home folder: things to sort, copy and delete. `v` gives other names and counts (the anti-cheat replay).
+const desk = (v = 0) => (sh) => sh.setupFiles(v ? {
+  'essay.txt': 'Why cats sleep all day.\n', 'old-essay.txt': 'First try.\n', 'list.txt': 'eggs\nrice\n',
+  'lake.jpg': '', 'hill.jpg': '', 'dog.jpg': '', 'tree.jpg': '', 'intro.mp3': '',
+  'docs/': null, 'photos/': null, 'trash/junk1.tmp': '', 'trash/junk2.tmp': '', 'empty/': null,
+} : {
+  'report.txt': 'Sales went up.\n', 'draft.txt': 'Sales went up?\n', 'todo.txt': 'milk\nbread\n',
+  'beach.jpg': '', 'city.jpg': '', 'song.mp3': '',
+  'docs/': null, 'photos/': null, 'old/a.tmp': '', 'old/b.tmp': '', 'empty/': null,
+});
+const jpgs = (sh) => listOf(sh, '~').filter((n) => n.endsWith('.jpg'));
+
+export default {
+  id: 'bash-files', title: 'Files and folders', color: 'green',
+  blurb: 'Make, copy, move and delete files, many at a time.',
+  challenges: [
+    {
+      id: 'bash-tidy', title: 'Tidy the desk', blurb: 'A home folder full of loose files. Sort it out.',
+      exercises: [
+        {
+          id: 'ffc-tidy', type: 'type', max: 6,
+          prompt: 'Make folders <code>pictures</code> and <code>music</code>, move every <code>.jpg</code> into <code>pictures</code> and every <code>.mp3</code> into <code>music</code>.',
+          setup: desk(), variant: desk(1),
+          check: (sh) => isDir(sh, 'pictures') && isDir(sh, 'music') && !listOf(sh, '~').some((n) => /\.(jpg|mp3)$/.test(n))
+            && listOf(sh, 'pictures').length > 0 && listOf(sh, 'pictures').every((n) => n.endsWith('.jpg')) && listOf(sh, 'music').every((n) => n.endsWith('.mp3')) && listOf(sh, 'music').length > 0,
+          solution: 'mkdir pictures music\nmv *.jpg pictures/\nmv *.mp3 music/',
+          explain: '<code>mkdir</code> takes several names at once, and a wildcard moves every match in one go, however many there are.',
+        },
+        {
+          id: 'ffc-clean', type: 'type', max: 6,
+          prompt: 'Delete every <code>.tmp</code> file in <code>old</code>, then remove the <code>old</code> folder and the <code>empty</code> folder too.',
+          setup: desk(),
+          check: (sh) => !exists(sh, 'old') && !exists(sh, 'empty') && exists(sh, 'docs'),
+          solution: 'rm old/*.tmp\nrmdir old empty',
+          explain: '<code>rmdir</code> only removes empty folders, so it is a safe way to finish. <code>rm -r old</code> would do it in one step.',
+        },
+      ],
+    },
+  ],
+  lessons: [
+    /* ------------------------------------------------------------ 1 */
+    {
+      id: 'bash-files-1', title: 'Making things',
+      exercises: [
+        {
+          id: 'ff1-touch', type: 'learn', new: true, title: '<code>touch</code>: a new, empty file',
+          body: '<code>touch notes.txt</code> creates an empty file called notes.txt. If the file already exists, it is left as it is (only its "last changed" time is updated). Give several names to make several files.',
+          demo: { setup: home(), run: ['touch notes.txt', 'touch a.txt b.txt'] },
+        },
+        {
+          id: 'ff1-type-touch', type: 'type',
+          prompt: 'Create an empty file called <code>shopping.txt</code> in your home folder.',
+          setup: home(),
+          check: (sh) => isFile(sh, 'shopping.txt'),
+          solution: 'touch shopping.txt',
+          explain: '<code>touch shopping.txt</code>. It pops into the tree straight away.',
+        },
+        {
+          id: 'ff1-mkdir', type: 'learn', new: true, title: '<code>mkdir</code>: a new folder',
+          body: '<code>mkdir recipes</code> makes a folder (make directory). <code>mkdir a b c</code> makes three. It refuses if the name is taken, and if the folder it should go in does not exist yet.',
+          demo: { setup: home(), run: ['mkdir recipes', 'ls'] },
+        },
+        {
+          id: 'ff1-match', type: 'match',
+          prompt: 'Match each command to what it creates.',
+          pairs: [['touch a.txt', 'An empty file'], ['mkdir a', 'An empty folder'], ['mkdir a b', 'Two folders'], ['touch a.txt b.txt', 'Two empty files']],
+          explain: 'Both commands take as many names as you like.',
+        },
+        {
+          id: 'ff1-type-mkdir', type: 'type',
+          prompt: 'Make two folders, <code>recipes</code> and <code>travel</code>, in your home folder.',
+          setup: home(),
+          check: (sh) => isDir(sh, 'recipes') && isDir(sh, 'travel'),
+          solution: 'mkdir recipes travel',
+          explain: '<code>mkdir recipes travel</code> makes both at once. Two separate commands work too.',
+        },
+        {
+          id: 'ff1-p', type: 'learn', new: true, title: 'Folders inside folders: <code>mkdir -p</code>',
+          body: '<code>mkdir school/maths</code> fails when school does not exist yet. <code>-p</code> (parents) makes every missing folder on the way: <code>mkdir -p school/maths/week1</code>. It also stays quiet if they already exist.',
+          demo: { setup: home(), run: ['mkdir -p school/maths/week1'] },
+        },
+        {
+          id: 'ff1-why-fail', type: 'choice',
+          prompt: 'Why did this fail?',
+          code: '$ mkdir trips/2026\nmkdir: cannot create directory ‘trips/2026’: No such file or directory',
+          options: ['There is no trips folder to put 2026 in', 'Folder names cannot contain numbers', 'trips/2026 already exists', 'mkdir only makes files'],
+          answer: 0,
+          explain: 'Without <code>-p</code>, <code>mkdir</code> only makes the last folder in the path, so every folder before it must already exist.',
+        },
+        {
+          id: 'ff1-outcome', type: 'outcome',
+          prompt: 'What does your home look like after this command?',
+          setup: (sh) => sh.setupFiles({ 'notes.txt': 'hi\n' }),
+          command: 'mkdir -p music/rock',
+          show: 'tree',
+          distractors: [['mkdir music'], ['touch music']],
+          explain: '<code>-p</code> makes <code>music</code> and then <code>rock</code> inside it.',
+        },
+        {
+          id: 'ff1-build', type: 'build',
+          prompt: 'Make <code>trips/2026/japan</code> in one go, even though <code>trips</code> does not exist yet.',
+          tiles: ['mkdir', '-p', 'trips/2026/japan', 'touch', '-r', 'cd'],
+          answers: [['mkdir', '-p', 'trips/2026/japan']],
+          explain: '<code>mkdir -p</code> creates each missing folder along the path.',
+        },
+        {
+          id: 'ff1-type-p', type: 'type',
+          prompt: 'Create the folder <code>projects/blog/drafts</code> with one command.',
+          setup: (sh) => sh.setupFiles({ 'notes/todo.txt': 'tidy up\n' }),
+          check: (sh) => isDir(sh, 'projects/blog/drafts'),
+          solution: 'mkdir -p projects/blog/drafts',
+          explain: '<code>mkdir -p projects/blog/drafts</code> makes all three levels.',
+        },
+      ],
+    },
+    /* ------------------------------------------------------------ 2 */
+    {
+      id: 'bash-files-2', title: 'Copy and move',
+      exercises: [
+        {
+          id: 'ff2-cp', type: 'learn', new: true, title: '<code>cp</code>: copy',
+          body: '<code>cp report.txt backup.txt</code> copies a file: first what to copy, then where to. Copy into a folder and the copy keeps its name: <code>cp report.txt docs/</code>. If the target file exists, it is overwritten without asking.',
+          demo: { setup: desk(), run: ['cp report.txt backup.txt', 'cp report.txt docs/'] },
+        },
+        {
+          id: 'ff2-type-cp', type: 'type',
+          prompt: 'Make a copy of <code>report.txt</code> called <code>report-old.txt</code>.',
+          setup: desk(),
+          check: (sh) => fileIs(sh, 'report-old.txt', 'Sales went up.') && isFile(sh, 'report.txt'),
+          solution: 'cp report.txt report-old.txt',
+          explain: '<code>cp</code> source, then target. The original stays where it was.',
+        },
+        {
+          id: 'ff2-r', type: 'learn', new: true, title: 'Copy a folder: <code>cp -r</code>',
+          body: 'A plain <code>cp</code> skips folders ("omitting directory"). <code>cp -r photos photos-backup</code> copies the folder and everything inside it (recursive).',
+          demo: { setup: (sh) => sh.setupFiles({ 'photos/cat.jpg': '', 'photos/dog.jpg': '' }), run: ['cp -r photos photos-backup'] },
+        },
+        {
+          id: 'ff2-omitting', type: 'choice',
+          prompt: 'What went wrong?',
+          code: '$ cp photos backup\ncp: -r not specified; omitting directory \'photos\'',
+          options: ['photos is a folder, and copying a folder needs -r', 'backup already exists', 'photos is empty', 'You cannot copy photos'],
+          answer: 0,
+          explain: 'Folders need <code>cp -r</code>. Files do not.',
+        },
+        {
+          id: 'ff2-mv', type: 'learn', new: true, title: '<code>mv</code>: move or rename',
+          body: '<code>mv</code> has one job with two faces. Into a folder, it moves: <code>mv song.mp3 music/</code>. To a new name, it renames: <code>mv draft.txt final.txt</code>. The original is gone either way, unlike <code>cp</code>.',
+          demo: { setup: desk(), run: ['mv draft.txt final.txt', 'mv song.mp3 docs/'] },
+        },
+        {
+          id: 'ff2-match', type: 'match',
+          prompt: 'Match each command to what happens.',
+          pairs: [['cp a.txt b.txt', 'Two files: a.txt and b.txt'], ['mv a.txt b.txt', 'a.txt is renamed to b.txt'], ['mv a.txt docs/', 'a.txt moves into docs'], ['cp -r docs old', 'A copy of the whole docs folder']],
+          explain: '<code>cp</code> leaves the original; <code>mv</code> takes it away.',
+        },
+        {
+          id: 'ff2-outcome', type: 'outcome', new: true,
+          prompt: 'Here is the starting tree. Which one do you get after the command?',
+          setup: (sh) => sh.setupFiles({ 'todo.txt': 'milk\n', 'notes/ideas.txt': 'game\n' }),
+          command: 'mv todo.txt notes/',
+          show: 'tree',
+          distractors: [['cp todo.txt notes/'], ['mv todo.txt notes.txt']],
+          explain: 'A folder as the target means "move it in there". The file keeps its name and leaves home.',
+        },
+        {
+          id: 'ff2-type-rename', type: 'type',
+          prompt: 'Rename <code>draft.txt</code> to <code>final.txt</code>.',
+          setup: desk(),
+          check: (sh) => !exists(sh, 'draft.txt') && fileIs(sh, 'final.txt', 'Sales went up?'),
+          solution: 'mv draft.txt final.txt',
+          explain: 'Renaming is moving to a new name: <code>mv draft.txt final.txt</code>.',
+        },
+        {
+          id: 'ff2-type-move', type: 'type',
+          prompt: 'Move <code>report.txt</code> into the <code>docs</code> folder, and back up the whole <code>docs</code> folder as <code>docs-backup</code>.',
+          setup: desk(),
+          check: (sh) => !exists(sh, 'report.txt') && isFile(sh, 'docs/report.txt') && isFile(sh, 'docs-backup/report.txt'),
+          solution: 'mv report.txt docs/\ncp -r docs docs-backup',
+          explain: 'Move first, then copy the folder with <code>-r</code>, so the backup has the report in it.',
+        },
+      ],
+    },
+    /* ------------------------------------------------------------ 3 */
+    {
+      id: 'bash-files-3', title: 'Deleting for real',
+      exercises: [
+        {
+          id: 'ff3-rm', type: 'learn', new: true, title: '<code>rm</code>: gone for good',
+          body: '<code>rm draft.txt</code> deletes a file. There is <b>no trash can</b> and no undo: it is gone the moment you press Enter. Read the line twice before you run it.',
+          teaches: ['no trash can'],
+          demo: { setup: desk(), run: ['rm draft.txt'] },
+        },
+        {
+          id: 'ff3-undo', type: 'choice',
+          prompt: 'You ran <code>rm report.txt</code> by mistake. How do you get it back?',
+          options: ['You can\'t: rm does not use a trash can', 'Run rm again', 'Look in the trash folder', 'Press Ctrl+Z'],
+          answer: 0,
+          needs: ['no trash can'],
+          explain: 'Deleting from the terminal is final. That is why backups (and git) exist.',
+        },
+        {
+          id: 'ff3-type-rm', type: 'type',
+          prompt: 'Delete <code>draft.txt</code>, but keep <code>report.txt</code>.',
+          setup: desk(),
+          check: (sh) => !exists(sh, 'draft.txt') && isFile(sh, 'report.txt'),
+          solution: 'rm draft.txt',
+          explain: '<code>rm draft.txt</code> removes just that one file.',
+        },
+        {
+          id: 'ff3-dirs', type: 'learn', new: true, title: 'Deleting folders',
+          body: '<code>rmdir empty</code> removes a folder only if it is empty: a safe choice. <code>rm -r old</code> removes a folder and everything in it. <code>rm -i</code> asks before each file, a good habit when unsure.',
+          demo: { setup: desk(), run: ['rmdir empty', 'rm -r old'] },
+        },
+        {
+          id: 'ff3-match', type: 'match',
+          prompt: 'Match each command to what it removes.',
+          pairs: [['rm a.txt', 'One file'], ['rmdir old', 'A folder, only if it is empty'], ['rm -r old', 'A folder and all it holds'], ['rm -i a.txt', 'A file, after asking you']],
+          explain: 'Pick the gentlest one that does the job.',
+        },
+        {
+          id: 'ff3-not-empty', type: 'choice',
+          prompt: 'What does this message tell you?',
+          code: '$ rmdir old\nrmdir: failed to remove \'old\': Directory not empty',
+          options: ['old still has files in it, so rmdir left it alone', 'old does not exist', 'You may not delete folders', 'old was deleted'],
+          answer: 0,
+          explain: '<code>rmdir</code> refuses to delete anything that holds files. Use <code>rm -r</code> if you really mean it.',
+        },
+        {
+          id: 'ff3-fill', type: 'fill',
+          prompt: 'Delete the folder <code>old</code> and everything inside it.',
+          before: 'rm ', after: ' old',
+          options: ['-r', '-i', '-p', '-a'],
+          answer: 0,
+          explain: '<code>-r</code> (recursive) goes into the folder and removes it all.',
+        },
+        {
+          id: 'ff3-outcome', type: 'outcome',
+          prompt: 'Which tree is left after this command?',
+          setup: (sh) => sh.setupFiles({ 'keep.txt': 'x\n', 'old/a.tmp': '', 'old/b.tmp': '', 'empty/': null }),
+          command: 'rm -r old',
+          show: 'tree',
+          distractors: [['rmdir empty'], ['rm old/a.tmp']],
+          explain: '<code>rm -r old</code> takes the folder and both files. <code>empty</code> stays.',
+        },
+        {
+          id: 'ff3-type-folders', type: 'type',
+          prompt: 'Remove the empty folder <code>empty</code> and the folder <code>old</code> with its files. Keep everything else.',
+          setup: desk(),
+          check: (sh) => !exists(sh, 'empty') && !exists(sh, 'old') && isDir(sh, 'docs') && isFile(sh, 'report.txt'),
+          solution: 'rmdir empty\nrm -r old',
+          explain: '<code>rmdir</code> for the empty one, <code>rm -r</code> for the full one. <code>rm -r empty old</code> does both.',
+        },
+      ],
+    },
+    /* ------------------------------------------------------------ 4 */
+    {
+      id: 'bash-files-4', title: 'Wildcards',
+      exercises: [
+        {
+          id: 'ff4-star', type: 'learn', new: true, title: '<code>*</code> matches anything',
+          body: '<code>*</code> stands for "any characters, any number of them". <code>*.jpg</code> means every name ending in .jpg; <code>report*</code> every name starting with report. <code>ls *.jpg</code> lists just the photos.',
+          demo: { setup: desk(), run: ['ls *.jpg'] },
+        },
+        {
+          id: 'ff4-which', type: 'choice',
+          prompt: 'Which names does <code>*.txt</code> match here?',
+          code: '$ ls\nbeach.jpg  draft.txt  report.txt  song.mp3  txt-notes',
+          options: ['draft.txt and report.txt', 'Only report.txt', 'txt-notes too', 'Every file'],
+          answer: 0,
+          explain: '<code>*.txt</code> needs the name to end in <code>.txt</code>. <code>txt-notes</code> only starts with txt.',
+        },
+        {
+          id: 'ff4-expand', type: 'learn', new: true, title: 'The shell expands it first',
+          body: 'Wildcards are not part of <code>ls</code> or <code>mv</code>. The shell swaps <code>*.jpg</code> for the matching names before the command runs, so <code>mv *.jpg photos/</code> really runs <code>mv beach.jpg city.jpg photos/</code>.',
+          teaches: ['the shell expands globs'],
+          demo: { setup: desk(), run: ['echo *.jpg', 'mv *.jpg photos/'] },
+        },
+        {
+          id: 'ff4-echo', type: 'choice',
+          prompt: 'The folder has <code>a.log</code>, <code>b.log</code> and <code>c.txt</code>. What does <code>echo *.log</code> print?',
+          options: ['a.log b.log', '*.log', 'a.log b.log c.txt', 'Nothing: echo does not read files'],
+          answer: 0,
+          needs: ['the shell expands globs'],
+          explain: 'The shell expands <code>*.log</code> to the matching names, and <code>echo</code> just prints what it was given.',
+        },
+        {
+          id: 'ff4-type-move', type: 'type',
+          prompt: 'Move every <code>.jpg</code> file in your home folder into <code>photos</code>.',
+          setup: desk(), variant: desk(1),
+          check: (sh) => jpgs(sh).length === 0 && listOf(sh, 'photos').filter((n) => n.endsWith('.jpg')).length >= 2,
+          solution: 'mv *.jpg photos/',
+          explain: '<code>mv *.jpg photos/</code> works for two photos or two hundred, whatever they are called.',
+        },
+        {
+          id: 'ff4-more', type: 'learn', new: true, title: '<code>?</code> and <code>[abc]</code>',
+          body: '<code>?</code> matches exactly one character: <code>day?.txt</code> matches day1.txt, not day10.txt. <code>[abc]</code> matches one of the listed characters: <code>file[12].txt</code> matches file1.txt and file2.txt.',
+          demo: { setup: (sh) => sh.setupFiles({ 'day1.txt': '', 'day2.txt': '', 'day10.txt': '' }), run: ['ls day?.txt', 'ls day[12]*'] },
+        },
+        {
+          id: 'ff4-match', type: 'match',
+          prompt: 'Match each pattern to a name it matches (and the others don\'t).',
+          pairs: [['*.mp3', 'song.mp3'], ['day?.txt', 'day7.txt'], ['day??.txt', 'day12.txt'], ['[ab]*', 'beach.jpg']],
+          explain: '<code>*</code> any run of characters, <code>?</code> exactly one, <code>[ab]</code> one of a or b.',
+        },
+        {
+          id: 'ff4-outcome', type: 'outcome',
+          prompt: 'What is left in your home folder after this?',
+          setup: (sh) => sh.setupFiles({ 'a.tmp': '', 'b.tmp': '', 'notes.txt': 'keep\n', 'tmp-list.txt': 'keep\n' }),
+          command: 'rm *.tmp',
+          show: 'tree',
+          distractors: [['rm *tmp*'], ['rm a.tmp']],
+          explain: '<code>*.tmp</code> only matches names ending in <code>.tmp</code>; <code>tmp-list.txt</code> survives.',
+        },
+        {
+          id: 'ff4-build', type: 'build',
+          prompt: 'Copy every <code>.txt</code> file into <code>docs</code>.',
+          tiles: ['cp', '*.txt', 'docs/', 'mv', '?.txt', '-r'],
+          answers: [['cp', '*.txt', 'docs/']],
+          explain: '<code>cp *.txt docs/</code>: the last name is the target folder.',
+        },
+        {
+          id: 'ff4-type-copy', type: 'type',
+          prompt: 'Copy every <code>.txt</code> file in your home folder into <code>docs</code> (keep the originals).',
+          setup: desk(), variant: desk(1),
+          check: (sh) => { const t = listOf(sh, '~').filter((n) => n.endsWith('.txt')); return t.length > 0 && t.every((n) => isFile(sh, 'docs/' + n)); },
+          solution: 'cp *.txt docs/',
+          explain: '<code>cp *.txt docs/</code> copies all of them, whatever their names.',
+        },
+      ],
+    },
+    /* ------------------------------------------------------------ 5 */
+    {
+      id: 'bash-files-5', title: 'Names with spaces',
+      exercises: [
+        {
+          id: 'ff5-spaces', type: 'learn', new: true, title: 'Spaces split words',
+          body: 'The shell splits a line at spaces, so <code>touch my notes.txt</code> makes two files: <code>my</code> and <code>notes.txt</code>. To keep a space in a name, quote it: <code>touch "my notes.txt"</code>.',
+          demo: { setup: (sh) => sh.setupFiles({}), run: ['touch my notes.txt', 'touch "my notes.txt"'] },
+        },
+        {
+          id: 'ff5-outcome', type: 'outcome', new: true,
+          prompt: 'What do you get after this command?',
+          setup: (sh) => sh.setupFiles({ 'readme.txt': 'hi\n' }),
+          command: 'mkdir summer trip',
+          show: 'tree',
+          distractors: [['mkdir "summer trip"'], ['mkdir summer']],
+          explain: 'Without quotes, <code>summer</code> and <code>trip</code> are two names, so you get two folders.',
+        },
+        {
+          id: 'ff5-type-quote', type: 'type',
+          prompt: 'Create one empty file called <code>my notes.txt</code> (with the space).',
+          setup: (sh) => sh.setupFiles({ 'readme.txt': 'hi\n' }),
+          check: (sh) => isFile(sh, 'my notes.txt') && !exists(sh, 'my'),
+          solution: 'touch "my notes.txt"',
+          explain: 'Quotes keep the space inside one name: <code>touch "my notes.txt"</code>.',
+        },
+        {
+          id: 'ff5-escape', type: 'learn', new: true, title: 'Or escape the space',
+          body: 'A backslash before a space also keeps it in the name: <code>cd summer\\ trip</code>. Tab completion writes names this way for you. Single quotes work like double quotes here: <code>\'summer trip\'</code>.',
+          teaches: ['escape \\', 'quote \''],
+        },
+        {
+          id: 'ff5-which', type: 'choice',
+          prompt: 'Which command moves the file <code>old notes.txt</code> into <code>docs</code>?',
+          options: ['<code>mv old\\ notes.txt docs/</code>', '<code>mv old notes.txt docs/</code>', '<code>mv old-notes.txt docs/</code>', '<code>mv (old notes.txt) docs/</code>'],
+          answer: 0,
+          explain: 'The backslash keeps <code>old notes.txt</code> together. Without it, mv looks for two files, <code>old</code> and <code>notes.txt</code>.',
+        },
+        {
+          id: 'ff5-type-cd', type: 'type',
+          prompt: 'Go into the folder <code>summer trip</code>.',
+          setup: (sh) => sh.setupFiles({ 'summer trip/day1.txt': 'Arrived.\n', 'summer/': null }),
+          check: (sh) => cwdIs(sh, 'summer trip'),
+          solution: 'cd "summer trip"',
+          explain: '<code>cd "summer trip"</code> or <code>cd summer\\ trip</code>. Plain <code>cd summer trip</code> gets two names, and cd complains about too many arguments.',
+        },
+        {
+          id: 'ff5-braces', type: 'learn', new: true, title: 'Braces: many names at once',
+          body: 'The shell expands braces into several words: <code>mkdir {jan,feb,mar}</code> makes three folders, and <code>touch day{1..5}.txt</code> makes day1.txt to day5.txt. Unlike <code>*</code>, braces make names that do not exist yet.',
+          demo: { setup: (sh) => sh.setupFiles({}), run: ['mkdir {jan,feb,mar}', 'touch day{1..3}.txt'] },
+        },
+        {
+          id: 'ff5-brace-choice', type: 'choice',
+          prompt: 'What does this print?',
+          code: '$ echo photo{1..3}.jpg',
+          options: ['photo1.jpg photo2.jpg photo3.jpg', 'photo{1..3}.jpg', 'photo1..3.jpg', 'photo1.jpg photo3.jpg'],
+          answer: 0,
+          explain: '<code>{1..3}</code> counts 1, 2, 3, and each number is put into the name.',
+        },
+        {
+          id: 'ff5-build', type: 'build',
+          prompt: 'Make the folders <code>red</code>, <code>green</code> and <code>blue</code> with a brace.',
+          tiles: ['mkdir', '{red,green,blue}', 'touch', '{red..blue}', '*', '-r'],
+          answers: [['mkdir', '{red,green,blue}']],
+          explain: 'Commas list names; <code>..</code> is only for counting ranges like <code>{1..5}</code>.',
+        },
+        {
+          id: 'ff5-type-braces', type: 'type',
+          prompt: 'Create the files <code>week1.txt</code> to <code>week4.txt</code> with one short command.',
+          setup: (sh) => sh.setupFiles({ 'readme.txt': 'hi\n' }),
+          check: (sh) => [1, 2, 3, 4].every((i) => isFile(sh, `week${i}.txt`)) && !exists(sh, 'week5.txt'),
+          solution: 'touch week{1..4}.txt',
+          explain: '<code>touch week{1..4}.txt</code> expands to four names before touch runs.',
+        },
+      ],
+    },
+  ],
+};

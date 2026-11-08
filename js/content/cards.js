@@ -8,6 +8,8 @@
 // Rarity tracks difficulty: add/commit are common, reflog/bisect/rebase -i are legendary.
 // tests/cards.test.mjs checks every unlockedBy id exists and every lesson unlocks at least one card.
 
+import { BASH_CARDS, BASH_COURSE } from './bash/cards.js';
+
 export const RARITIES = ['common', 'rare', 'epic', 'legendary'];
 
 export const COURSE = {
@@ -25,7 +27,7 @@ export const COURSE = {
 const c = (id, rarity, unlockedBy, cmd, title, what, example, mistake) =>
   ({ id, course: 'git', cmd, title, what, example, mistake, rarity, unlockedBy: [].concat(unlockedBy) });
 
-export const CARDS = [
+const GIT_CARDS = [
   /* ------------------------------------------------------------------ basics */
   c('status', 'common', 'basics-1', 'git status', 'Your dashboard',
     'Compares the working tree, the index and HEAD: untracked, unstaged and staged changes.',
@@ -398,6 +400,12 @@ export const CARDS = [
     'git tag -n',
     'Wondering why a tag has no message: only annotated tags (-a -m) store one of their own.'),
 ];
+
+// every course's deck (the bash deck lives in ./bash/cards.js); a card's `course` says whose it is
+export const CARDS = [...GIT_CARDS, ...BASH_CARDS];
+// per-course labels (profile, share card): courseMeta(id) falls back to the git course's
+export const COURSE_META = { git: COURSE, bash: BASH_COURSE };
+export const courseMeta = (id) => COURSE_META[id] || COURSE;
 
 export const cardById = (id) => CARDS.find((x) => x.id === id) || null;
 export const cardsForLesson = (lessonId) => CARDS.filter((x) => x.unlockedBy.includes(lessonId));

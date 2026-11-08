@@ -26,6 +26,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { UNITS } from '../js/content/index.js';
+import { UNITS as BASH_UNITS } from '../js/content/bash/index.js';
+import { Shell } from '../js/shell.js';
 
 // Items any exercise may use without a learn card. Keep this short and say why.
 const ALLOW = new Set([
@@ -216,4 +218,188 @@ test('the parser reads commands, flags and revision syntax', () => {
   assert.deepEqual(s('Both sides moved, and git wants you to pick'), []);
   assert.deepEqual(s('git reset --hard ORIG_HEAD && git tag x refs/bisect/bad'), ['git reset', 'git reset --hard', 'git tag', 'ref ORIG_HEAD', 'ref refs/bisect/bad']);
   assert.deepEqual(s('echo "*.log" >> .gitignore'), ['shell >>']);
+});
+
+/* ============================================================== the bash course */
+// The same rule for js/content/bash, with a bash parser. Items:
+//   `cmd ls`, `ls -a` (flags per command; `-la` splits into -l -a; `-5` is `-<n>`; `tail -n +3` adds `tail +N`),
+//   `op |`, `op >`, `op >>`, `op <`, `op <<<`, `op 2>`, `op 2>>`, `op 2>&1`, `op &>`, `op &&`, `op ||`, `op ;`,
+//   `glob *`, `glob ?`, `glob []`, `brace {,}`, `brace {..}`, `quote "`, `quote '`, `escape \`,
+//   `path /` (absolute), `path ~`, `path ..`, `path .`, `path /dev/null`, `var $`.
+// A string is read as a command line when its first word is a command the engine knows (`ls -a`, `cd ..`); any
+// other string (a file name in a prompt, `*.txt`, `~/notes`) still contributes its globs, paths and operators.
+// `&&` and `;` are only needed where they can't be split (a build tile, a fill, an outcome command): a typed answer
+// can always be two lines. Concept tags (`teaches`/`needs`) work exactly as in the git course. Each unit's challenge
+// puzzles count as coming after its lessons (where the path puts them).
+const BASH_CMDS = new Set(new Shell().completions().shell);
+const OPS = ['2>&1', '<<<', '&>>', '2>>', '&>', '2>', '>>', '&&', '||', '>', '<', '|', ';'];
+const REDIRS = new Set(['>', '>>', '<', '<<<', '2>', '2>>', '&>', '&>>', '2>&1']);
+// a line as words and operators, quotes kept inside the words
+export function bashTokens(line) {
+  const out = [];
+  const s = String(line);
+  let i = 0, cur = '', inWord = false;
+  const push = () => { if (inWord) out.push({ w: cur }); cur = ''; inWord = false; };
+  while (i < s.length) {
+    const c = s[i];
+    if (c === '\\' && i + 1 < s.length) { cur += c + s[i + 1]; inWord = true; i += 2; continue; }
+    if (c === '"' || c === "'") { const j = s.indexOf(c, i + 1); const end = j < 0 ? s.length : j + 1; cur += s.slice(i, end); inWord = true; i = end; continue; }
+    if (/\s/.test(c)) { push(); i++; continue; }
+    const op = OPS.find((o) => s.startsWith(o, i));
+    if (op && !(op.startsWith('2') && inWord)) { push(); out.push({ op }); i += op.length; continue; }
+    cur += c; inWord = true; i++;
+  }
+  push();
+  return out;
+}
+function wordItems(w, out) {
+  const unq = w.replace(/"[^"]*"|'[^']*'/g, (m) => { out.add(m[0] === '"' ? 'quote "' : "quote '"); return 'Q'; });
+  if (/\\ /.test(unq)) out.add('escape \\');
+  const bare = unq.replace(/\\./g, 'E');
+  if (/\*/.test(bare)) out.add('glob *');
+  if (/\?/.test(bare)) out.add('glob ?');
+  if (/\[[^\]]+\]/.test(bare)) out.add('glob []');
+  if (/\{[^}]*,[^}]*\}/.test(bare)) out.add('brace {,}');
+  if (/\{\w+\.\.\w+\}/.test(bare)) out.add('brace {..}');
+  if (bare === '/dev/null') out.add('path /dev/null');
+  else if (bare.startsWith('/')) out.add('path /');
+  if (/^~/.test(bare)) out.add('path ~');
+  if (/(^|\/)\.\.(\/|$)/.test(bare)) out.add('path ..');
+  if (bare === '.' || bare.startsWith('./')) out.add('path .');
+  if (/\$\w/.test(bare)) out.add('var $');
+}
+function bashFlagItems(cmd, t) {
+  if (t === '-' || t === '--') return [`${cmd} ${t}`];
+  if (t.startsWith('--')) return [`${cmd} ${t.split('=')[0]}`];
+  if (/^-\d+$/.test(t)) return [`${cmd} -<n>`];
+  const m = /^-([a-zA-Z]+)\d*$/.exec(t);
+  if (m) return [...m[1]].map((c) => `${cmd} -${c}`);
+  return [`${cmd} ${t}`];
+}
+// The items in some command lines (needed by an exercise, or taught by a learn card).
+export function bashItems(text, { splitOps = true } = {}) {
+  const out = new Set();
+  for (const raw of decode(String(text)).split('\n')) {
+    let start = true, cmd = null, prev = null;
+    for (const t of bashTokens(raw.trim().replace(/^\$\s+/, ''))) {
+      if (t.op) {
+        if (splitOps || !['&&', ';'].includes(t.op)) out.add(`op ${t.op}`);
+        if (!REDIRS.has(t.op)) { start = true; cmd = null; }
+        prev = t.op; continue;
+      }
+      const w = t.w;
+      if (REDIRS.has(prev)) { wordItems(w, out); prev = w; continue; }   // a redirect's file name
+      if (start) {
+        start = false;
+        cmd = BASH_CMDS.has(w) ? w : null;
+        if (cmd) { out.add(`cmd ${w}`); prev = w; continue; }
+      }
+      if (cmd && (w === '-' || /^-[^\d]/.test(w))) for (const f of bashFlagItems(cmd, w)) out.add(f);
+      else if (cmd && /^-\d+$/.test(w)) out.add(`${cmd} -<n>`);
+      else {
+        if (cmd === 'tail' && /^\+\d+$/.test(w) && prev === '-n') out.add('tail +N');
+        wordItems(w, out);
+      }
+      prev = w;
+    }
+  }
+  return out;
+}
+const firstWord = (s) => bashTokens(decode(String(s)).trim().replace(/^\$\s+/, ''))[0]?.w;
+const isBashCmd = (s) => BASH_CMDS.has(firstWord(s));
+
+export function bashTaughtBy(ex) {
+  const out = new Set();
+  const cmds = new Set();
+  const add = (set) => { for (const x of set) { out.add(x); const m = /^cmd (\S+)/.exec(x); if (m) cmds.add(m[1]); } };
+  const spans = [...codeSpans(ex.title), ...codeSpans(ex.body)];
+  for (const s of spans) if (!/^\s*-/.test(s)) add(bashItems(s));
+  for (const c of ex.demo?.run || []) add(bashItems(c));
+  for (const s of spans) {
+    if (/^\s*-/.test(s)) for (const t of s.trim().split(/\s+/)) if (/^-/.test(t)) for (const c of cmds) for (const f of bashFlagItems(c, t)) out.add(f);
+    if (/^\s*(2>&1|<<<|&>|2>|>>|&&|\|\||>|<|\||;)\s*$/.test(s)) out.add(`op ${s.trim()}`);
+  }
+  for (const t of ex.teaches || []) {
+    if (isBashCmd(t)) for (const x of bashItems(t)) out.add(x);
+    else out.add(t);
+  }
+  return out;
+}
+export function bashNeededBy(ex) {
+  const out = new Set();
+  const addAll = (s, opts) => { for (const x of bashItems(s, opts)) out.add(x); };
+  // a command line, or else just the globs/paths in it (file names in prompts, `*.txt`, `~/notes`)
+  const addAny = (s) => {
+    if (isBashCmd(s)) return addAll(s);
+    for (const tok of bashTokens(decode(String(s)).replace(/<[^>]+>/g, ' '))) if (tok.w) wordItems(tok.w, out);
+  };
+  const addField = (s) => { s = String(s); for (const c of codeSpans(s)) addAny(c); if (!/<code>/.test(s)) addAny(s); };
+  for (const s of codeSpans(ex.prompt)) addAny(s);
+  switch (ex.type) {
+    case 'type': addAll(ex.solution, { splitOps: false }); break;
+    case 'build': addAll(ex.answers[0].join(' ')); break;
+    case 'fill': addAll(ex.before + String(ex.options[ex.answer]).replace(/<[^>]+>/g, '') + ex.after); break;
+    case 'outcome': addAll(ex.command); break;
+    case 'choice': {
+      addField(ex.options[ex.answer]);
+      for (const l of String(ex.code || '').split('\n')) if (/^\$\s/.test(l)) addAll(l);
+      break;
+    }
+    case 'match': for (const p of ex.pairs) for (const s of p) addField(s); break;
+    case 'order': for (const s of ex.steps) addField(s); break;
+  }
+  for (const t of ex.needs || []) {
+    if (isBashCmd(t)) addAll(t);
+    else out.add(t);
+  }
+  return out;
+}
+const bashSteps = (units) => units.flatMap((u) => [
+  ...u.lessons.map((l) => ({ id: l.id, exercises: l.exercises })),
+  ...(u.challenges || []).filter((c) => c && typeof c === 'object').map((c) => ({ id: c.id, exercises: c.exercises })),
+]);
+export function bashAudit(units = BASH_UNITS) {
+  const taught = new Map(), firstTaught = new Map();
+  for (const l of bashSteps(units)) for (const ex of l.exercises) if (ex.type === 'learn') for (const x of bashTaughtBy(ex)) if (!firstTaught.has(x)) firstTaught.set(x, l.id);
+  const problems = [];
+  for (const l of bashSteps(units)) for (const ex of l.exercises) {
+    if (ex.type === 'learn') { for (const x of bashTaughtBy(ex)) if (!taught.has(x)) taught.set(x, l.id); continue; }
+    for (const x of bashNeededBy(ex)) if (!taught.has(x)) problems.push({ lesson: l.id, id: ex.id, item: x, later: firstTaught.get(x) || null });
+  }
+  return problems;
+}
+
+test('bash: every exercise only needs what a learn card taught earlier', () => {
+  const problems = bashAudit();
+  const lines = problems.map((p) => `  ${p.lesson.padEnd(15)} ${p.id.padEnd(22)} needs ${JSON.stringify(p.item)}${p.later ? `  (first taught in ${p.later})` : '  (never taught)'}`);
+  assert.equal(problems.length, 0, `${problems.length} bash exercise item(s) are tested before they are taught:\n${lines.join('\n')}`);
+});
+
+test('bash: teaches tags sit on learn cards, needs tags on graded exercises', () => {
+  const bad = [];
+  for (const l of bashSteps(BASH_UNITS)) for (const ex of l.exercises) {
+    if (ex.teaches && ex.type !== 'learn') bad.push(`${ex.id}: teaches on a ${ex.type}`);
+    if (ex.needs && ex.type === 'learn') bad.push(`${ex.id}: needs on a learn card`);
+    for (const t of [...(ex.teaches || []), ...(ex.needs || [])]) if (typeof t !== 'string' || !t.trim()) bad.push(`${ex.id}: empty tag`);
+  }
+  assert.deepEqual(bad, []);
+});
+
+test('bash: the parser reads commands, flags, operators, globs and paths', () => {
+  const s = (t, o) => [...bashItems(t, o)].sort();
+  assert.deepEqual(s('ls -la ~/notes'), ['cmd ls', 'ls -a', 'ls -l', 'path ~']);
+  assert.deepEqual(s('ls photos | wc -l'), ['cmd ls', 'cmd wc', 'op |', 'wc -l']);
+  assert.deepEqual(s('cat a.txt b.txt 2> /dev/null >> all.txt'), ['cmd cat', 'op 2>', 'op >>', 'path /dev/null']);
+  assert.deepEqual(s('ls nope > out.txt 2>&1'), ['cmd ls', 'op 2>&1', 'op >']);
+  assert.deepEqual(s('mv *.jpg photos/'), ['cmd mv', 'glob *']);
+  assert.deepEqual(s('touch "my notes.txt" day{1..3}.txt {a,b}'), ['brace {,}', 'brace {..}', 'cmd touch', 'quote "']);
+  assert.deepEqual(s('cd ../.. && pwd'), ['cmd cd', 'cmd pwd', 'op &&', 'path ..']);
+  assert.deepEqual(s('cd ../.. && pwd', { splitOps: false }), ['cmd cd', 'cmd pwd', 'path ..']);
+  assert.deepEqual(s('tail -n +2 log.txt'), ['cmd tail', 'tail +N', 'tail -n']);
+  assert.deepEqual(s('head -5 f'), ['cmd head', 'head -<n>']);
+  assert.deepEqual(s('wc -l < access.log'), ['cmd wc', 'op <', 'wc -l']);
+  assert.deepEqual(s('cd -'), ['cd -', 'cmd cd']);
+  assert.deepEqual(s('Lists the folder'), []);
+  assert.deepEqual(s('rm my\\ file.txt'), ['cmd rm', 'escape \\']);
+  assert.deepEqual(s('$ echo hi > a.txt'), ['cmd echo', 'op >']);
 });
