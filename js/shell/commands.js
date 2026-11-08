@@ -1,8 +1,8 @@
 // The shell's commands. BUILTINS run inside the shell (they can change its state: cd, export, read…);
 // UTILS are "programs" in /usr/bin, found through $PATH. Each is (c: Ctx, args) -> exit status
 // (or undefined: c.status, which c.err() sets). Text tools live in text.js.
-import { joinPath, dirname, basename, normalize, isUnder, modeString, cmp, FsError } from './fs.js';
-import { ShellError, getopt, linesOf, escapes, printf, shQuote, strftime, Input } from './util.js';
+import { joinPath, dirname, basename, isUnder, modeString, cmp, FsError } from './fs.js';
+import { ShellError, getopt, linesOf, escapes, printf, shQuote, strftime } from './util.js';
 import { TEXT_UTILS } from './text.js';
 import { MAN } from './man.js';
 
