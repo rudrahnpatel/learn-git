@@ -17,6 +17,11 @@ export const tagAt = (r, t) => r.s.tags[t]?.id || null;
 // the commit a tag points at, found by its message
 export const tagMsg = (r, t) => { const id = tagAt(r, t); return id ? firstLine(r.commit(id).msg) : null; };
 export const ran = (r, re) => r.history.some((h) => re.test(h));
+// no conflict markers left in any working-tree file
+export const markerFree = (r) => !Object.values(r.s.work).some((t) => /^(<{7}|>{7})( |$)/m.test(t));
+// a working-tree file's lines, trailing spaces and blank lines ignored (for `resolve` exercise checks)
+export const linesOf = (r, p) => String(r.s.work[p] ?? '').split('\n').map((l) => l.trimEnd()).filter(Boolean);
+export const workIs = (r, p, lines) => { const got = linesOf(r, p); return got.length === lines.length && lines.every((l, i) => got[i] === l); };
 
 /* ------------------------------------------------ shared scenarios */
 // A recipe site with two commits on main.

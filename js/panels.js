@@ -1,46 +1,14 @@
 // Modal tools: conflict surgeon, interactive-rebase todo editor, file editor.
 import { h, modal, announce } from './dom.js';
-import { splitLines, joinLines, firstLine } from './git.js';
+import { firstLine } from './git.js';
+import { parseConflicts, resolveConflicts, conflictedFiles } from './conflicts.js';
 
 /* ------------------------------------------------------- conflict surgeon */
-export function parseConflicts(text) {
-  const lines = splitLines(text);
-  const segs = [];
-  let buf = [];
-  for (let i = 0; i < lines.length; i++) {
-    if (lines[i].startsWith('<<<<<<< ') || lines[i] === '<<<<<<<') {
-      const hunk = { ours: [], theirs: [], oursLabel: lines[i].slice(8), theirsLabel: '' };
-      let j = i + 1;
-      while (j < lines.length && !lines[j].startsWith('=======')) hunk.ours.push(lines[j++]);
-      j++;
-      while (j < lines.length && !lines[j].startsWith('>>>>>>>')) hunk.theirs.push(lines[j++]);
-      if (j >= lines.length) { buf.push(...lines.slice(i)); break; }
-      hunk.theirsLabel = lines[j].slice(8);
-      if (buf.length) segs.push({ text: buf }); buf = [];
-      segs.push({ hunk });
-      i = j;
-    } else buf.push(lines[i]);
-  }
-  if (buf.length) segs.push({ text: buf });
-  return segs;
-}
-export function resolveConflicts(segs, choices) {
-  const out = [];
-  let k = 0;
-  for (const s of segs) {
-    if (s.text) { out.push(...s.text); continue; }
-    const c = choices[k++], hk = s.hunk;
-    if (c === 'ours') out.push(...hk.ours);
-    else if (c === 'theirs') out.push(...hk.theirs);
-    else if (c === 'both') out.push(...hk.ours, ...hk.theirs);
-    else if (c === 'both-rev') out.push(...hk.theirs, ...hk.ours);
-    else out.push('<<<<<<< ' + hk.oursLabel, ...hk.ours, '=======', ...hk.theirs, '>>>>>>> ' + hk.theirsLabel);
-  }
-  return joinLines(out);
-}
+// the marker parsing and resolving live in js/conflicts.js (shared with the `resolve` exercise's editor)
+export { parseConflicts, resolveConflicts };
 
 export function openSurgeon(repo, { onSave, inRebase }) {
-  const files = Object.keys(repo.s.work).filter((p) => /^<{7} /m.test(repo.s.work[p])).sort();
+  const files = conflictedFiles(repo);
   if (!files.length) return null;
   let current = files[0];
   const body = h('div', { class: 'surgeon' });
@@ -70,7 +38,7 @@ export function openSurgeon(repo, { onSave, inRebase }) {
     });
     const save = (add) => {
       onSave(current, result.value, add);
-      const left = Object.keys(repo.s.work).filter((p) => /^<{7} /m.test(repo.s.work[p])).sort();
+      const left = conflictedFiles(repo);
       if (left.length) { current = left[0]; draw(); body.querySelector('button')?.focus(); announce(`Saved. Next file: ${current}.`); } else m.close();
     };
     body.replaceChildren(...[

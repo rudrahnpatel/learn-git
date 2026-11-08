@@ -1,4 +1,5 @@
-// Renderers for every exercise type in the schema (.notes/game-design.md). Each returns
+// Renderers for every exercise type in the schema (.notes/game-design.md); `resolve` (the conflict editor) lives in
+// ./resolve.js. Each returns
 //   { el, ready(), grade() -> { ok, answer }, key(e) -> handled, lock(), learn?, focus? }
 // The lesson player owns the Check button and the feedback sheet; ctx.onChange() tells it the
 // answer state changed, ctx.submit() asks it to check now (match does that when all pairs pop).
@@ -9,6 +10,7 @@ import { Terminal, phone } from '../terminal.js';
 import { sfx } from '../sound.js';
 import { shake, reducedMotion } from './fx.js';
 import { keepFocus } from './kb.js';
+import { resolve } from './resolve.js';
 
 const richRe = /<\/?(code|b|i|em|strong|br|kbd)\b/i;
 const rich = (s) => (richRe.test(String(s)) ? { html: String(s) } : {});
@@ -476,7 +478,7 @@ function type(ex, ctx) {
   };
 }
 
-const RENDERERS = { learn, choice, fill, build, order, match, graph, type };
+const RENDERERS = { learn, choice, fill, build, order, match, graph, type, resolve: (ex, ctx) => resolve(ex, ctx, { richPrompt: prompt }) };
 export const TYPES = Object.keys(RENDERERS);
 export function renderExercise(ex, ctx) {
   const f = RENDERERS[ex.type];

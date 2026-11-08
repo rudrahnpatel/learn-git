@@ -2,7 +2,7 @@
 // teammate. Each lesson's repos continue from the previous lesson's end state: the builders below
 // form one chain (day0 -> committed -> founded -> withHours -> ... -> released), so every exercise
 // starts exactly where the story left off. Teammate messages are learn cards ("<b>Teammate:</b> …").
-import { fileAt, has, msgAt, pushed, ran, tagAt } from './helpers.js';
+import { fileAt, has, msgAt, pushed, ran, tagAt, markerFree, linesOf } from './helpers.js';
 
 const URL = 'https://github.com/crumb-co/bakery-site.git';
 const idx = (nav) => `<h1>Crumb Bakery</h1>\n<nav>${nav}</nav>\n<p>Open 7-15</p>`;
@@ -36,7 +36,8 @@ const midRebase = (r) => {
   r.run('git rebase origin/main'); // stops on the nav conflict, by design
   if (r.s.seq?.kind !== 'rebase') throw new Error('story: expected the rebase to stop on a conflict');
 };
-const rebased = (r) => { midRebase(r); r.setupFiles({ 'index.html': idx('Home Menu Order') }); r.sh('git add index.html'); r.sh('git rebase --continue'); };
+const navFixed = (r) => { midRebase(r); r.setupFiles({ 'index.html': idx('Home Menu Order') }); }; // resolved in the editor, not added yet
+const rebased = (r) => { navFixed(r); r.sh('git add index.html'); r.sh('git rebase --continue'); };
 const rebasedPushed = (r) => { rebased(r); r.sh('git push --force-with-lease'); };
 // Lesson 4: the PR is merged (merge commit) and the branch deleted; a week later a bug has shipped
 const prMerged = (r) => { rebasedPushed(r); r.mergePullRequest('order-form', { how: 'merge', number: 3, title: 'Online cake orders', deleteBranch: true }); };
@@ -59,7 +60,13 @@ const releaseReady = (r) => { releaseDay(r); r.sh('git pull'); };
 const released = (r) => { releaseReady(r); r.sh('git tag -a v1.0 -m "First release"'); r.sh('git push origin v1.0'); };
 const typoFixed = (r) => { released(r); r.setupFiles({ 'menu.html': '<h2>Menu</h2>\nrye loaf 4 (GF)\ncinnamon roll 2' }); };
 
-const markerFree = (r) => !Object.values(r.s.work).some((t) => /^(<{7}|>{7}) /m.test(t));
+// the resolved index.html: the heading, ONE nav with Home first and both new links, the hours
+const navResolved = (r) => {
+  const l = linesOf(r, 'index.html');
+  const nav = l.length === 3 && /^<nav>(.*)<\/nav>$/.exec(l[1]);
+  const links = nav ? nav[1].trim().split(/\s+/) : [];
+  return l[0] === '<h1>Crumb Bakery</h1>' && l[2] === '<p>Open 7-15</p>' && links.length === 3 && links[0] === 'Home' && links.includes('Menu') && links.includes('Order');
+};
 const leasedOnly = (r) => ran(r, /--force-with-lease/) && !ran(r, /push.*(\s--force(\s|$)|\s-f(\s|$))/);
 
 export default {
@@ -255,11 +262,19 @@ export default {
           explain: 'In a rebase, HEAD is the new base plus the commits replayed so far. Your commit is the incoming side, the reverse of a merge.',
         },
         {
-          id: 'st3-type-resolve', type: 'type',
-          prompt: 'The rebase stopped on the nav. Keep both links, <code>&lt;nav&gt;Home Menu Order&lt;/nav&gt;</code>, mark it resolved and finish the rebase.',
-          setup: midRebase,
+          id: 'st3-type-resolve', type: 'resolve',
+          prompt: 'The rebase stopped on the nav. Keep both links in one nav: <code>&lt;nav&gt;Home Menu Order&lt;/nav&gt;</code>.',
+          setup: midRebase, file: 'index.html',
+          check: (r) => markerFree(r) && navResolved(r),
+          solution: '<h1>Crumb Bakery</h1>\n<nav>Home Menu Order</nav>\n<p>Open 7-15</p>',
+          explain: '"Keep both" would give two nav bars. Some conflicts need a hand edit: one line with the teammate\'s Menu link and your Order link.',
+        },
+        {
+          id: 'st3-type-continue', type: 'type',
+          prompt: '<code>index.html</code> is fixed. Mark it resolved and finish the rebase.',
+          setup: navFixed,
           check: (r) => !r.inProgress() && r.branchName() === 'order-form' && has(fileAt(r, 'order-form', 'index.html'), 'Menu') && has(fileAt(r, 'order-form', 'index.html'), 'Order') && markerFree(r) && r.isAncestor(r.s.tracking.main, r.s.branches['order-form']) && msgAt(r, 'order-form') === 'Link order form in nav',
-          solution: 'edit index.html "<h1>Crumb Bakery</h1>\\n<nav>Home Menu Order</nav>\\n<p>Open 7-15</p>" && git add index.html && git rebase --continue',
+          solution: 'git add index.html && git rebase --continue',
           explain: 'Both commits now sit on top of the teammate\'s work, with new ids. The pushed copies are the old ones.',
         },
         {

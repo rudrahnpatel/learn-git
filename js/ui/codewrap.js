@@ -11,7 +11,7 @@ function wrapTokens(code) {
   code.textContent = '';
   for (const part of parts) {
     if (!part) continue;
-    if (/^\s+$/.test(part)) code.append(' ');
+    if (/^\s+$/.test(part)) code.append(part.includes('\n') ? '\n' : ' '); // keep line breaks (a multi-line answer)
     else { const s = document.createElement('span'); s.className = 'tok'; s.textContent = part; code.append(s); }
   }
 }
