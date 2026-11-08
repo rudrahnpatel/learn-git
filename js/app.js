@@ -24,6 +24,7 @@ import { renderCards, cardRevealStep } from './ui/cards.js';
 import { REWARDS } from './brand.js';
 import { startCloud } from './cloud/sync.js';
 import { maybeSigninNudge } from './ui/account.js';
+import { track } from './analytics/track.js';
 
 const app = document.getElementById('app');
 let cleanup = null;
@@ -73,10 +74,14 @@ function lessonRoute(id) {
   const items = node.kind === 'lesson' ? lessonItems(node.lesson, crowns(node)) : reviewItems(node.unit);
   if (!items.length) return goHome();
   screen('lesson');
+  const mode = node.kind === 'review' ? 'review' : 'lesson';
+  track('lesson_start', { node: node.id, mode, crowns: crowns(node), total: items.length });
   cleanup = playSession(app, {
-    title: node.title, items, mode: node.kind === 'review' ? 'review' : 'lesson',
-    onQuit: () => goHome(),
+    title: node.title, items, mode,
+    onAnswer: (a) => track('exercise_answer', { node: node.id, ...a }),
+    onQuit: (p) => { track('lesson_quit', { node: node.id, mode, ...p }); goHome(); },
     onFinish: (res) => {
+      track('lesson_done', { node: node.id, mode, reached: items.length, total: items.length, accuracy: res.accuracy, ms: res.timeMs });
       const wasDone = nodeStatus(node) === 'done';
       const xp = game.XP.lesson + (res.perfect ? game.XP.perfect : 0) + res.bonusXp;
       const xpEvent = game.addXp(xp);
@@ -114,6 +119,7 @@ function challengeRoute(levelId) {
   const node = nodeForLevel(levelId);
   if (node && nodeStatus(node) === 'locked') { toast('That challenge is still locked.', { icon: ICON.lock() }); return goHome(); }
   screen('challenge');
+  track('challenge_start', { level: levelId });
   const wasDone = node ? nodeStatus(node) === 'done' : true;
   cleanup = renderChallenge(app, level, {
     unitTitle: node?.unit.title,
@@ -130,10 +136,13 @@ function mistakesRoute() {
   const items = game.mistakeKeys().map((k) => exerciseByKey(k)).filter(Boolean).slice(0, 10).map((x) => ({ ex: x.ex, key: x.key }));
   if (!items.length) { location.hash = '#/practice'; return; }
   screen('lesson');
+  track('lesson_start', { node: 'mistakes', mode: 'mistakes', total: items.length });
   cleanup = playSession(app, {
     title: 'Mistakes review', items, mode: 'mistakes',
-    onQuit: () => { location.hash = '#/practice'; },
+    onAnswer: (a) => track('exercise_answer', { node: 'mistakes', ...a }),
+    onQuit: (p) => { track('lesson_quit', { node: 'mistakes', mode: 'mistakes', ...p }); location.hash = '#/practice'; },
     onFinish: (res) => {
+      track('lesson_done', { node: 'mistakes', mode: 'mistakes', reached: items.length, total: items.length, accuracy: res.accuracy, ms: res.timeMs });
       const xpEvent = game.addXp(Math.max(1, res.reviewed * game.XP.review));
       game.questProgress('practice');
       game.G.stats.bestCombo = Math.max(game.G.stats.bestCombo, res.bestCombo);
@@ -157,6 +166,8 @@ async function boot() {
   else if (ev?.lost) pending = { message: `Your ${ev.lost}-day streak ended. Time to <code>git init</code> a fresh one!` };
   game.checkAchievements();
   game.takeAchievements();
+  // analytics (a no-op without config, with Do Not Track / GPC, or off the production host)
+  track('app_open', { pwa: matchMedia('(display-mode: standalone)').matches || navigator.standalone === true, onboarded: !!game.G.onboarded });
   window.addEventListener('hashchange', route);
   route();
   // Accounts (no-op with an empty js/cloud/config.js; supabase-js loads only for a signed-in browser).
@@ -167,7 +178,7 @@ async function boot() {
       const calm = ['home', 'profile', 'shop', 'cards', 'practice', 'onboard'].includes(document.body.dataset.screen);
       if (calm && !document.querySelector('.modal-wrap')) route();
     },
-    onSignedIn: (p) => toast(`Signed in as ${p.name || p.email}. Your progress is synced.`, { icon: ICON.check(), ms: 3200 }),
+    onSignedIn: (p) => { track('sign_in'); toast(`Signed in as ${p.name || p.email}. Your progress is synced.`, { icon: ICON.check(), ms: 3200 }); },
     onAuthError: (msg) => toast(msg, { icon: ICON.close(), ms: 3200 }),
   });
 }

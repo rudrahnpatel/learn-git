@@ -87,6 +87,48 @@ to change) and deploy.
 Locally: `python3 -m http.server 8801` from the repo root, then open http://localhost:8801/index.html
 (and http://localhost:8801/admin/).
 
+## Analytics (first-party, no cookies)
+
+The app and the landing page send a small set of learning events (lesson started / finished / quit,
+first-try answers, onboarding steps, the funnel) to an `events` table in this same project, and
+`/admin` → **Analytics** shows them. The event list and payload shapes live in
+`js/analytics/events.js`; the table, policy and dashboard functions in
+[`migrations/analytics.sql`](migrations/analytics.sql) (also the `-- ==== analytics ====` section at
+the end of `schema.sql`).
+
+Privacy: a random install id (localStorage, never linked to a Google account), a per-visit session
+id, a coarse device class (phone / tablet / desktop) and small id/number props. No user id, email,
+IP, user agent or referrer is stored, no cookies are set. Browsers that send **Do Not Track** or
+**Global Privacy Control** send nothing at all. Only the production host sends: localhost, LAN hosts
+and plain http stay quiet (set `localStorage['learn-git:analytics'] = 'on'` to test locally, `'off'`
+to opt a browser out).
+
+### Owner steps (once, before deploying the analytics code)
+
+1. **SQL Editor → New query**, paste [`migrations/analytics.sql`](migrations/analytics.sql) (or the
+   whole `schema.sql` again), **Run**. Safe to re-run. Run it *before* deploying: until the table
+   exists, every page's events get a 404 and are dropped (harmless, but lost).
+2. Check it: **Table Editor → events** exists with RLS on. Open the deployed `/app`, play a step, and
+   a few rows appear within ~15 s (or when you switch tabs). `/admin` → **Analytics** shows them.
+3. **Retention (recommended): delete raw events after 180 days.** **Database → Extensions →** enable
+   `pg_cron`, then in the SQL editor:
+
+   ```sql
+   select cron.schedule('learn-git-events-cleanup', '17 3 * * *',
+                        $c$select public.analytics_cleanup(180)$c$);
+   ```
+
+   (`select cron.unschedule('learn-git-events-cleanup');` removes it. `analytics_cleanup` keeps at
+   least 30 days and can't be called through the API.) Without pg_cron, run
+   `select public.analytics_cleanup(180);` by hand now and then.
+4. If the database ever stops accepting events from a new app version (a new event name), re-run
+   the migration: the insert policy lists the allowed names.
+
+Nothing else changes: no new keys, no provider settings, no Vercel config. The anon key can only
+insert rows of the right shape; reading is admins only. Anyone holding the public anon key *can*
+insert junk events of a valid shape (there is no server to rate-limit); the dashboard is for trends,
+not accounting.
+
 ## How it is secured
 
 - The browser only has the anon key. Row-level security on `progress` limits every signed-in user

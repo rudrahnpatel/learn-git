@@ -12,13 +12,20 @@ import { watchKeyboard } from './kb.js';
 const COMBO_AT = { 5: 2, 10: 3, 15: 5 };
 
 // items: [{ ex, key }]. mode: 'lesson' | 'review' | 'mistakes'. onFinish(result) is called once.
-export function playSession(root, { title, items, mode = 'lesson', onFinish, onQuit }) {
+// onAnswer({ ex, type, ok, attempt, skipped }) after each answer (analytics); onQuit({ reached, total, accuracy, ms, ex }).
+export function playSession(root, { title, items, mode = 'lesson', onFinish, onQuit, onAnswer }) {
   setShapes('lesson');
   document.title = `${title} · ${APP.name}`;
   const queue = items.map((it) => ({ ...it, retry: false }));
   const total = items.length;
   const graded = items.filter((it) => it.ex.type !== 'learn').length || 1;
   const firstTry = new Map(); // key -> ok on first attempt
+  const attempts = new Map(); // key -> answers so far (analytics)
+  const answered = (item, ok, skipped = false) => {
+    const attempt = (attempts.get(item.key) || 0) + 1;
+    attempts.set(item.key, attempt);
+    onAnswer?.({ ex: item.key, type: item.ex.type, ok, attempt, skipped });
+  };
   let solved = 0, pos = 0, combo = 0, bestCombo = 0, bonusXp = 0, reviewed = 0;
   let cur = null, checked = false, result = null, finished = false;
   const t0 = Date.now();
@@ -115,6 +122,7 @@ export function playSession(root, { title, items, mode = 'lesson', onFinish, onQ
     result = cur.grade();
     const key = item.key;
     if (!firstTry.has(key)) firstTry.set(key, result.ok);
+    answered(item, !!result.ok);
     if (result.ok) {
       solved++;
       combo++;
@@ -146,6 +154,7 @@ export function playSession(root, { title, items, mode = 'lesson', onFinish, onQ
     let answer = '';
     try { answer = cur.grade().answer; } catch { /* ignore */ }
     if (!firstTry.has(item.key)) firstTry.set(item.key, false);
+    answered(item, false, true);
     combo = 0;
     queue.push({ ...item, retry: true });
     if (mode !== 'mistakes') game.recordMistake(item.key);
@@ -185,7 +194,11 @@ export function playSession(root, { title, items, mode = 'lesson', onFinish, onQ
   async function quit() {
     if (finished) return;
     const sure = await confirmModal('Leave the lesson?', 'You\'ll lose your progress in this lesson.', { ok: 'Quit', cancel: 'Keep learning', danger: true });
-    if (sure) { finished = true; onQuit?.(); }
+    if (sure) {
+      finished = true;
+      const tried = [...firstTry.values()];
+      onQuit?.({ reached: Math.min(pos, total), total, accuracy: tried.length ? tried.filter(Boolean).length / tried.length : 0, ms: Date.now() - t0, ex: queue[pos]?.key });
+    }
   }
 
   const onKey = (e) => {
