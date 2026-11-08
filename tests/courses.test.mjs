@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as game from '../js/ui/game.js';
 import { useUnits, nodes, nodeStatus, currentNode, crateEarned } from '../js/ui/path.js';
-import { COURSES, courseById, isPlayable, playableId } from '../js/courses.js';
+import { COURSES, courseById, isPlayable, playableId, engineOf } from '../js/courses.js';
 import { REWARDS, REWARD_SETS, useRewards, say } from '../js/brand.js';
 import { mergeStates } from '../js/cloud/merge.js';
 import { freshState, repairState } from '../js/storage.js';
@@ -122,17 +122,44 @@ test('challenges always count for the git course', () => {
   assert.equal(game.courseProgress('bash').challenges['first-commit'], undefined);
 });
 
-test('the course registry: git playable, bash listed as coming soon', () => {
+test('the course registry: git and bash playable, each with its engine', async () => {
   assert.ok(COURSES.length >= 2);
-  for (const c of COURSES) for (const k of ['id', 'title', 'short', 'blurb', 'icon', 'accent']) assert.ok(c[k], `${c.id}.${k}`);
+  for (const c of COURSES) for (const k of ['id', 'title', 'short', 'blurb', 'icon', 'accent', 'engine']) assert.ok(c[k], `${c.id}.${k}`);
   assert.equal(new Set(COURSES.map((c) => c.id)).size, COURSES.length);
   assert.ok(isPlayable(courseById('git')));
   const bash = courseById('bash');
   assert.equal(bash.title, 'Linux CLI & bash');
-  assert.equal(bash.comingSoon, true);
-  assert.equal(isPlayable(bash), false);
-  assert.equal(playableId('bash'), 'git');
+  assert.ok(!bash.comingSoon);
+  assert.equal(isPlayable(bash), true);
+  assert.equal(playableId('bash'), 'bash');
   assert.equal(playableId('nope'), 'git');
+  assert.equal(engineOf('git'), 'git');
+  assert.equal(engineOf('bash'), 'shell');
+  // the bash content loads through the registry, and placement only skips units that exist (the first release
+  // has four), never all of them
+  const units = await bash.load();
+  assert.equal(units.length, 4);
+  assert.deepEqual(units.map((u) => u.id), ['bash-steps', 'bash-files', 'bash-reading', 'bash-pipes']);
+  assert.ok(bash.placements.length >= 2 && bash.placements[0].skip === 0);
+  for (const p of bash.placements) assert.ok(Number.isInteger(p.skip) && p.skip >= 0 && p.skip < units.length, p.label);
+});
+
+test('bash puzzle challenges are path nodes of their own course', async () => {
+  const units = await courseById('bash').load();
+  fresh('bash');
+  useUnits(units, 'bash');
+  const ch = nodes().filter((n) => n.kind === 'challenge');
+  assert.equal(ch.length, units.reduce((s, u) => s + u.challenges.length, 0));
+  assert.ok(ch.every((n) => n.puzzle && n.id === `${n.unit.id}:challenge:${n.levelId}`));
+  // unlock everything before the first puzzle, then finish it: it counts in bash's challenges, not git's
+  const first = ch[0];
+  for (const n of nodes().slice(0, nodes().indexOf(first))) if (n.kind !== 'challenge') game.completeNode(n.id);
+  assert.equal(nodeStatus(first), 'current');
+  game.completePuzzle(first.levelId, 2);
+  assert.equal(nodeStatus(first), 'done');
+  assert.equal(game.courseProgress('bash').challenges[first.levelId].stars, 2);
+  assert.equal(game.G.challenges[first.levelId], undefined);
+  assert.deepEqual([1, 0.99, 0.5, 0.2].map(game.puzzleStars), [3, 2, 2, 1]);
 });
 
 test('reward words: git keeps its flavour, other courses get the neutral set', () => {

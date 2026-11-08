@@ -101,6 +101,8 @@ export async function switchCourse(id) {
   await loadContent(id);
   if (loadedCourse !== id) return false;
   useRewards(id);
+  // the first time a course with its own placement opens: "how much do you know?" (git asks in onboarding)
+  if (c.placements && !game.courseState(id).placed) await askPlacement(c);
   // lessons finished on another device before this one had the course: their cards, without a reveal
   game.grantCompletedCards(Object.entries(game.courseProgress(id).nodes).filter(([k, v]) => v?.done && k.includes(':lesson:')).map(([k]) => k.split(':lesson:')[1]), id);
   sfx.tap();
@@ -109,6 +111,29 @@ export async function switchCourse(id) {
   refreshScreen({ home: true, focus: '.course-pill', switched: { course: id, from } });
   return true;
 }
+
+// Placement for a course opened for the first time (js/courses.js `placements`): one question, the answers mark the
+// first units as skipped (still playable), as git's onboarding does. Closing it starts at the beginning. Asked once.
+export function askPlacement(c) {
+  return new Promise((resolve) => {
+    let picked = false;
+    const done = (skip) => {
+      const p = game.courseProgress(c.id);
+      p.placement = skip;
+      game.courseState(c.id).placed = true;
+      game.save();
+      resolve(skip);
+    };
+    const opts = c.placements.map((p, i) => h('button', { class: 'onb-opt place-opt', type: 'button',
+      onclick: () => { picked = true; sfx.tap(); m.close(); done(p.skip); announce(p.skip ? `${p.skip === 1 ? 'The first unit is' : `The first ${p.skip} units are`} marked as skipped. They stay playable.` : 'Starting at the very beginning.'); } },
+    h('span', { class: 'lvl', 'aria-hidden': 'true', html: bars(i) }),
+    h('span', { class: 'onb-opt-t' }, h('span', { class: 'big-t' }, p.label), h('span', { class: 'small-t' }, p.note))));
+    const m = modal(`How much ${c.short === 'bash' ? 'terminal' : c.title} do you know?`, h('div', { class: 'placement' },
+      h('p', { class: 'muted course-note' }, 'We\'ll skip what you know. Skipped units stay open, so you can play them any time.'),
+      h('div', { class: 'onb-opts' }, opts)), { onClose: () => { if (!picked) done(0); } });
+  });
+}
+const bars = (n) => `<svg viewBox="0 0 28 24" width="28" height="24" aria-hidden="true">${[0, 1, 2, 3].map((i) => `<rect x="${i * 7}" y="${18 - i * 5}" width="5" height="${6 + i * 5}" rx="2.5" class="lvl-bar${i <= n ? ' on' : ''}"/>`).join('')}</svg>`;
 
 // The home course pill: the active course, its lesson count, and the way into the switcher.
 export function coursePill() {

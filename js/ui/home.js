@@ -101,7 +101,7 @@ export function renderHome(root, { message = null, popNode = null, refresh } = {
     const label = { lesson: 'LESSON', release: 'PATH REWARD', challenge: 'CHALLENGE', review: 'UNIT REVIEW' }[n.kind];
     const done = st === 'done';
     const meta = n.kind === 'lesson' ? (crowns(n) ? `${crowns(n)} crown${crowns(n) > 1 ? 's' : ''} · replays are shuffled` : `${n.lesson.exercises.length} exercises · about 3 min`)
-      : n.kind === 'challenge' ? 'A live repo puzzle. Stars become XP.'
+      : n.kind === 'challenge' ? (n.puzzle ? `${n.puzzle.blurb} Stars become XP.` : 'A live repo puzzle. Stars become XP.')
       : n.kind === 'review' ? '10 exercises from this unit, shuffled.'
       : tagged ? `Release ${n.version} · ${CUR.many} inside, and sometimes ${REWARDS.boost.a}.` : `${cap(CUR.many)} inside, and sometimes ${REWARDS.boost.a}.`;
     if (n.kind === 'release' && done) { toast(tagged ? `Crate ${n.version} already opened. Onwards!` : 'Crate already opened. Onwards!', { icon: ICON.crate(true) }); return; }
@@ -135,7 +135,7 @@ export function renderHome(root, { message = null, popNode = null, refresh } = {
       if (reward) pickFlyUp(reward.cherries);
       return;
     }
-    if (n.kind === 'challenge') location.hash = `#/challenge/${encodeURIComponent(n.levelId)}`;
+    if (n.kind === 'challenge' && !n.puzzle) location.hash = `#/challenge/${encodeURIComponent(n.levelId)}`;
     else location.hash = `#/lesson/${encodeURIComponent(n.id)}`;
   }
 

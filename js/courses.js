@@ -13,26 +13,35 @@
 //   comingSoon  listed in the switcher but not selectable
 //   load()      async, resolves to the course's UNITS (same shape as js/content/index.js). Loaded lazily, only
 //               when the course is opened or the switcher counts its lessons.
+//   engine      what `setup`/`check` receive in live exercises: 'git' (a js/git.js Repo) or 'shell' (a js/shell.js
+//               Shell). The lesson player builds the matching one and shows the commit graph or the file tree.
+//   placements  the "how much do you know?" answers asked the first time the course is opened (git asks in
+//               onboarding, js/ui/game.js PLACEMENTS): { label, note, skip } where skip is the number of units marked
+//               as skipped. Only units that exist may be skipped.
 // Reward words per course live in js/brand.js (REWARD_SETS); a course without its own set gets the neutral one.
-//
-// For the course being built on another branch: give the bash entry a load() that imports its content
-// (e.g. `() => import('./content/bash/index.js').then((m) => m.UNITS)`), set available: true and drop comingSoon.
 
 const GIT_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v16M7 9c0 4 10 2 10 7" stroke="currentColor" stroke-width="2.4" fill="none" stroke-linecap="round"/><circle cx="7" cy="5" r="2.6" fill="currentColor"/><circle cx="7" cy="19" r="2.6" fill="currentColor"/><circle cx="17" cy="17" r="2.6" fill="currentColor"/></svg>';
 const BASH_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M6 9.5l3.5 2.5L6 14.5M11.5 15.5H17" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 export const DEFAULT_COURSE = 'git';
+export const engineOf = (id) => courseById(id)?.engine || 'git';
 
 export const COURSES = [
   {
     id: 'git', title: 'Git', short: 'Git', blurb: 'Commits, branches, rebases and rescues on a live repo.',
-    icon: GIT_ICON, accent: 'yellow', available: true,
+    icon: GIT_ICON, accent: 'yellow', available: true, engine: 'git',
     load: () => import('./content/index.js').then((m) => m.UNITS),
   },
   {
     id: 'bash', title: 'Linux CLI & bash', short: 'bash', blurb: 'Files, pipes, permissions and scripts in a real shell.',
-    icon: BASH_ICON, accent: 'green', available: false, comingSoon: true,
-    load: null,
+    icon: BASH_ICON, accent: 'green', available: true, engine: 'shell',
+    load: () => import('./content/bash/index.js').then((m) => m.UNITS),
+    // the first release has units 1-4 (Terminal basics), so placement can skip at most three of them
+    placements: [
+      { label: 'I\'ve never used a terminal', note: 'Start at the very first prompt.', skip: 0 },
+      { label: 'I can move around', note: 'Skip first steps: start with files and folders.', skip: 1 },
+      { label: 'I copy, move and read files', note: 'Start at pipes and redirection.', skip: 3 },
+    ],
   },
 ];
 
