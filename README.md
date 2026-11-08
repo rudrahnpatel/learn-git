@@ -27,6 +27,7 @@ index.html              shell: #shapes (paper-cut layer), #app, #modal-root, #fx
 css/style.css           all styles (light theme only, weight 400, hard offset shadows)
 fonts/                  Inter + Martian Mono 400 woff2 and their OFL licence texts
 js/git.js               the simulated git engine (pure, no DOM; runs in node)
+js/conflicts.js         conflict-marker parsing/resolving + resolve grading (pure; shared with the surgeon)
 js/levels.js            v1 levels (challenge nodes), bisect-hunt generator, sandbox
 js/content/             the exercise bank: UNITS -> lessons -> exercises (schema in .notes/game-design.md)
 js/content/cards.js     command cards: one per command/concept, rarity, unlockedBy lesson ids, per course
@@ -46,6 +47,7 @@ js/ui/profile.js        profile: contribution heatmap, stats, achievements, shar
 js/ui/cards.js          command card element, the #/cards collection, the "New card!" reveal
 js/ui/lesson.js         lesson player: progress bar, combo, Check, feedback sheet, re-queue
 js/ui/exercises.js      renderers for learn, choice, build, fill, match, order, graph, type
+js/ui/resolve.js        the `resolve` renderer: the conflict editor (ours / theirs / both / edit per hunk)
 js/ui/complete.js       celebrations (merged into main, commit-line streak, rewards) and the release shipper
 js/ui/challenge.js      challenge / bisect / sandbox screen (terminal, graph, goal, hints, trees toggle)
 js/ui/practice.js       practice hub and extra challenges

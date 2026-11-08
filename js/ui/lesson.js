@@ -191,6 +191,11 @@ export function playSession(root, { title, items, mode = 'lesson', onFinish, onQ
   const onKey = (e) => {
     if (document.querySelector('.modal-wrap') || finished) return;
     if (e.target.closest?.('.terminal')) return; // the mini terminal handles its own keys
+    // a text area (the conflict editor's hand edit) keeps Enter, digits and Esc; Ctrl/Cmd+Enter still checks
+    if (e.target.matches?.('textarea')) {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); if (checked) next(); else check(); }
+      return;
+    }
     if (e.key === 'Escape') { e.preventDefault(); quit(); return; }
     if (e.key === 'Enter') {
       if (e.target.tagName === 'BUTTON' && !e.target.classList.contains('cont') && !e.target.classList.contains('check')) return;

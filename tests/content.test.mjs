@@ -4,9 +4,10 @@
 import { Repo } from '../js/git.js';
 import { LEVELS } from '../js/levels.js';
 import { UNITS } from '../js/content/index.js';
+import { parseConflicts, resolveConflicts, hasMarkers, resolveTarget, gradeResolve } from '../js/conflicts.js';
 
 const COLORS = ['yellow', 'red', 'green', 'sky', 'pink', 'sunbeam'];
-const TYPES = ['learn', 'choice', 'build', 'fill', 'match', 'order', 'graph', 'type'];
+const TYPES = ['learn', 'choice', 'build', 'fill', 'match', 'order', 'graph', 'type', 'resolve'];
 let passed = 0, failed = 0;
 const ids = new Set();
 const counts = Object.fromEntries(TYPES.map((t) => [t, 0]));
@@ -122,6 +123,21 @@ function checkExercise(ex) {
       assert(cmds.length >= 1 && cmds.length <= 3, `solution has ${cmds.length} commands (max 3)`);
       for (const c of cmds) runOk(r, c, 'solution');
       assert(ex.check(r), 'check is false after running the solution');
+      break;
+    }
+    case 'resolve': {
+      assert(typeof ex.setup === 'function' && typeof ex.check === 'function' && str(ex.solution), 'resolve needs setup, check, solution');
+      const r = fresh(ex.setup);
+      const file = resolveTarget(ex, r);
+      assert(file && hasMarkers(r.s.work[file]), `setup leaves no conflict markers in ${file || 'any file'}`);
+      const hunks = parseConflicts(r.s.work[file]).filter((s) => s.hunk);
+      assert(hunks.length >= 1 && hunks.length <= 3, `${file} has ${hunks.length} conflicts (want 1-3)`);
+      assert(!ex.check(r), 'check is already true right after setup');
+      assert(!hasMarkers(ex.solution), 'the solution still has conflict markers');
+      assert(gradeResolve(ex, fresh(ex.setup), ex.solution), 'check is false for the solution text');
+      // leaving every hunk unresolved must never pass
+      const segs = parseConflicts(fresh(ex.setup).s.work[file]);
+      assert(!gradeResolve(ex, fresh(ex.setup), resolveConflicts(segs, []), file), 'check passes with the markers left in');
       break;
     }
   }

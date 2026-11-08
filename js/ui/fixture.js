@@ -37,6 +37,17 @@ export const UNITS = [
             check: (r) => r.tree(r.headId())['notes.txt'] !== undefined,
             solution: 'git add notes.txt && git commit -m "Add notes"',
             explain: 'Add it to the index, then commit the index.' },
+          { id: 'fx-b1-resolve', type: 'resolve', prompt: 'Keep <b>both</b> starters, main\'s first.',
+            setup(r) {
+              r.setupCommit('Initial commit', { 'menu.txt': 'Menu\nStarter: soup\nDessert: cake' });
+              r.sh('git switch -c spring'); r.setupCommit('Spring starter', { 'menu.txt': 'Menu\nStarter: salad\nDessert: cake' });
+              r.sh('git switch main'); r.setupCommit('Winter starter', { 'menu.txt': 'Menu\nStarter: pumpkin soup\nDessert: cake' });
+              r.run('git merge spring');
+            },
+            file: 'menu.txt',
+            check: (r) => r.s.work['menu.txt'] === 'Menu\nStarter: pumpkin soup\nStarter: salad\nDessert: cake\n',
+            solution: 'Menu\nStarter: pumpkin soup\nStarter: salad\nDessert: cake',
+            explain: 'Ours (HEAD) first, then theirs, and no markers left.' },
         ],
       },
       {

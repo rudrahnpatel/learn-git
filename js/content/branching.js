@@ -1,5 +1,5 @@
 // Unit 2: Branching & merging. Labels, fast-forwards, three-way merges, conflicts.
-import { aheadFeature, diverged, menuConflict, msgAt, fileAt, has, isMerge, span, clean } from './helpers.js';
+import { aheadFeature, diverged, menuConflict, msgAt, fileAt, has, isMerge, span, clean, markerFree, workIs } from './helpers.js';
 
 const bakery = (r) => {
   r.setupCommit('Initial commit', { 'site.html': '<h1>Bakery</h1>' });
@@ -296,6 +296,14 @@ export default {
             ['git add menu.txt', 'Mark the conflict as resolved'],
           ],
           explain: 'The markers are plain text in the file. Remove all three kinds before you add it, or they get committed.',
+        },
+        {
+          id: 'br4-resolve-both', type: 'resolve',
+          prompt: 'You merged <code>spring</code> into main. The new menu should list <b>both</b> starters, main\'s pumpkin soup first.',
+          setup: midMerge, file: 'menu.txt',
+          check: (r) => markerFree(r) && workIs(r, 'menu.txt', ['Menu', 'Starter: pumpkin soup', 'Starter: asparagus salad', 'Main: pasta', 'Dessert: cake']),
+          solution: 'Menu\nStarter: pumpkin soup\nStarter: asparagus salad\nMain: pasta\nDessert: cake',
+          explain: 'Ours (HEAD, main) on top, then theirs (spring), and no markers left. Next you would <code>git add menu.txt</code> and commit.',
         },
         {
           id: 'br4-escape', type: 'learn', new: true, title: 'Shortcuts and the exit',
