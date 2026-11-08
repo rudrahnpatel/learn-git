@@ -96,13 +96,22 @@ function readCmd(c, args) {
     while (text.endsWith('\\') && got && got.nl) { const more = input.readLine(); if (!more) break; text = text.slice(0, -1) + more.line; got = more; }
     text = text.replace(/\\(.)/g, '$1');
   }
+  // field splitting on $IFS (default space, tab, newline): IFS whitespace is trimmed and runs of it count as one
+  // separator; any other IFS character (IFS=: for /etc/passwd) separates exactly one field. IFS= keeps the line as is.
+  const ifs = c.sh.getVar('IFS') ?? ' \t\n';
+  const isWs = (ch) => ' \t\n'.includes(ch) && ifs.includes(ch), isSep = (ch) => ifs.includes(ch) && !' \t\n'.includes(ch);
   const fields = [];
-  let restText = text.replace(/^[ \t]+/, '');
+  let restText = text, a = 0;
+  while (a < restText.length && isWs(restText[a])) a++;
+  restText = restText.slice(a);
   for (let i = 0; i < names.length; i++) {
-    if (i === names.length - 1) { fields.push(restText.replace(/[ \t]+$/, '')); break; }
-    const m = restText.match(/^([^ \t]*)[ \t]*/);
-    fields.push(m[1]);
-    restText = restText.slice(m[0].length);
+    if (i === names.length - 1) { let e = restText.length; while (e > 0 && isWs(restText[e - 1])) e--; fields.push(restText.slice(0, e)); break; }
+    let j = 0;
+    while (j < restText.length && !isWs(restText[j]) && !isSep(restText[j])) j++;
+    fields.push(restText.slice(0, j));
+    while (j < restText.length && isWs(restText[j])) j++;
+    if (j < restText.length && isSep(restText[j])) { j++; while (j < restText.length && isWs(restText[j])) j++; }
+    restText = restText.slice(j);
   }
   names.forEach((n, i) => c.sh.setVar(n, fields[i] ?? ''));
   return got.nl ? 0 : 1;

@@ -102,3 +102,60 @@ export function outcomeProblems(ex) {
   }
   return p;
 }
+
+/* ------------------------------------------------------------------ script */
+// A script exercise: { prompt, file, starter, setup, runs: [{ args?, stdin?, code? }], check(sh), solution, variant?,
+// run?: 'bash' | 'exec' }. The learner edits the file's text; Run saves it into the shell and runs it once per entry of
+// `runs` (`bash file args`, or with run: 'exec', `chmod +x file` then `./file args`, which also tests the shebang),
+// stdin piped in. The check reads the state after all runs, as a `type` check does: files, and the last run's output
+// (sh.lastOut); `sh.runs` holds every run's { cmd, args, stdin, out, err, code } for checks that need more.
+const shq = (a) => (/^[\w@%+=:,./-]+$/.test(a) ? a : "'" + String(a).replace(/'/g, "'\\''") + "'");
+export function scriptCommands(ex) {
+  const file = ex.file;
+  const head = ex.run === 'exec' ? `./${file}` : `bash ${shq(file)}`;
+  return (ex.runs?.length ? ex.runs : [{}]).map((r) => ({ ...r, args: r.args || [], cmd: [head, ...(r.args || []).map(shq)].join(' ') }));
+}
+// Save `text` as the exercise's file in `sh` (relative to the current folder, where the runs happen) and run it.
+// Returns the runs, each with the terminal lines it printed; also kept on sh.runs.
+export function runScript(sh, ex, text) {
+  sh.writeFile(ex.file, text);
+  const runs = [];
+  if (ex.run === 'exec') {
+    const cmd = `chmod +x ${shq(ex.file)}`;
+    const r = sh.run(cmd);
+    runs.push({ cmd, args: [], stdin: null, out: sh.lastOut, err: sh.lastErr, code: r.code, lines: r.lines, setup: true });
+  }
+  for (const run of scriptCommands(ex)) {
+    const stdin = run.stdin ?? null;
+    const r = sh.run(run.cmd, { stdin, tty: false });
+    runs.push({ cmd: run.cmd, args: run.args, stdin, out: sh.lastOut, err: sh.lastErr, code: r.code, lines: r.lines, events: r.events });
+  }
+  sh.runs = runs.filter((r) => !r.setup);
+  return runs;
+}
+// Grading a script: a fresh shell from setup, the text saved and run, check(sh). With a `variant`, the same text runs
+// again on the variant's data and must pass there too, so a script that prints a hard-coded answer fails.
+//   { ok, live, variant (null without one), sh, runs }
+export function gradeScript(ex, text) {
+  const sh = freshShell(ex.setup);
+  const runs = runScript(sh, ex, text);
+  const live = passes(ex.check, sh);
+  if (!ex.variant) return { ok: live, live, variant: null, sh, runs };
+  let variant = false;
+  if (live) { const v = freshShell(ex.variant); runScript(v, ex, text); variant = passes(ex.check, v); }
+  return { ok: live && variant, live, variant, sh, runs };
+}
+export const SCRIPT_VARIANT_NOTE = 'Your script worked on these files, but not when it ran again on a second set of files with different contents. Does it print a fixed answer? Make the script work it out.';
+// Does a script check read output? Run the solution, then blank every run's output: if the check now fails, it did.
+export function scriptReadsOutput(ex) {
+  const { sh, live } = gradeScript({ ...ex, variant: null }, ex.solution);
+  if (!live) return false;
+  sh.lastOut = ''; sh.lastErr = '';
+  for (const r of sh.runs) { r.out = ''; r.err = ''; }
+  return !passes(ex.check, sh);
+}
+// A hard-coded script: prints what the solution's last run printed, whatever the files or arguments.
+export function cheatScript(ex) {
+  const { sh } = gradeScript({ ...ex, variant: null }, ex.solution);
+  return '#!/bin/bash\n' + cheatLine(sh.lastOut) + '\n';
+}

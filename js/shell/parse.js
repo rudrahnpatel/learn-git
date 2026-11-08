@@ -76,7 +76,7 @@ function braceVar(body, q) {
   if (!m) throw new SyntaxErr(`\${${body}}: bad substitution`);
   const [, name, rest] = m;
   if (!rest) return { k: 'var', name, q };
-  const op = rest.match(/^(:-|:=|:\+|:\?|-|=|\+|\?|%%|%|##|#|\/\/|\/)/);
+  const op = rest.match(/^(:-|:=|:\+|:\?|-|=|\+|\?|%%|%|##|#|\/\/|\/|\^\^|\^|,,|,)/);
   if (!op) throw new SyntaxErr(`\${${body}}: bad substitution`);
   return { k: 'var', name, op: op[1], arg: rest.slice(op[1].length), q };
 }
@@ -117,7 +117,12 @@ export function wordParts(text) {
   return t.length ? t[0].parts : [];
 }
 
-export function lex(src, { oneWord = false } = {}) {
+export function lex(src, opts = {}) {
+  const at = { line: 1 };
+  try { return lexer(src, opts, at); }
+  catch (e) { if (e instanceof SyntaxErr && e.line == null) e.line = at.line; throw e; }
+}
+function lexer(src, { oneWord = false } = {}, at) {
   const toks = [];
   let i = 0, line = 1;
   const pending = []; // here-docs waiting for the next newline
@@ -176,6 +181,7 @@ export function lex(src, { oneWord = false } = {}) {
       if (c === '|' || c === '&' || c === ';' || c === '(' || c === ')') { toks.push({ t: 'op', v: c, line }); i++; continue; }
     }
     // a word
+    at.line = line;
     const parts = [];
     let lit = '', litQ = 0;
     const add = (v, q) => { if (q !== litQ && lit) { parts.push({ k: 'lit', v: lit, q: litQ }); lit = ''; } litQ = q; lit += v; };
@@ -239,8 +245,10 @@ export function parse(src) {
   let p = 0;
   const peek = () => toks[p];
   const next = () => toks[p++];
+  const open = []; // compound commands being parsed: [{ kw, line }]
   const fail = (t = peek()) => {
-    if (t.t === 'eof') throw new SyntaxErr('syntax error: unexpected end of file', t.line);
+    const o = open[open.length - 1];
+    if (t.t === 'eof') throw new SyntaxErr('syntax error: unexpected end of file' + (o ? ` from \`${o.kw}' command on line ${o.line}` : ''), t.line);
     throw new SyntaxErr(`syntax error near unexpected token \`${show(t)}'`, t.line);
   };
   const skipNl = () => { while (peek().t === 'op' && peek().v === '\n') p++; };
@@ -299,10 +307,14 @@ export function parse(src) {
     const t = peek();
     const rw = reserved(t);
     let node;
-    if (rw === 'if') node = ifCmd();
-    else if (rw === 'for') node = forCmd();
-    else if (rw === 'while' || rw === 'until') node = whileCmd(rw === 'until');
-    else if (rw === '{') { p++; node = { type: 'group', body: list(new Set(['}'])) }; expectWord('}'); }
+    if (rw === 'if' || rw === 'for' || rw === 'while' || rw === 'until' || rw === '{') {
+      open.push({ kw: rw, line: t.line });
+      if (rw === 'if') node = ifCmd();
+      else if (rw === 'for') node = forCmd();
+      else if (rw === '{') { p++; node = { type: 'group', body: list(new Set(['}'])) }; expectWord('}'); }
+      else node = whileCmd(rw === 'until');
+      open.pop();
+    }
     else if (rw === 'function') { p++; const n = next(); if (!isWord(n)) fail(n); if (peek().t === 'op' && peek().v === '(') { p++; if (!(peek().t === 'op' && peek().v === ')')) fail(); p++; } return funcBody(n.parts[0].v); }
     else if (rw === 'case') throw new SyntaxErr('case … esac is not supported in this sandbox; use if / elif instead', t.line);
     else if (rw) fail(t);

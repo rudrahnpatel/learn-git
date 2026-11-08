@@ -3,7 +3,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { UNITS } from '../js/content/bash/index.js';
-import { freshShell, replay, gradeShellType, readsOutput, cheatLine, outcomeOptions, outcomeProblems, treeLines } from '../js/shellex.js';
+import { freshShell, replay, gradeShellType, readsOutput, cheatLine, outcomeOptions, outcomeProblems, treeLines, gradeScript, runScript, scriptCommands, scriptReadsOutput, cheatScript } from '../js/shellex.js';
+import { SCRIPT_FIXTURES } from './fixtures/script-exercises.mjs';
+import { runOut, runCode, runErr } from '../js/content/shell-helpers.js';
 import { buildShell } from '../js/shell.js';
 import { printedNumber, lineCount, listOf } from '../js/content/bash/helpers.js';
 
@@ -99,4 +101,61 @@ test('bash exercise ids are unique across lessons and puzzles; lineCount counts 
   const ids = new Set();
   for (const u of UNITS) for (const l of [...u.lessons, ...u.challenges]) for (const ex of l.exercises) { assert.ok(!ids.has(ex.id), ex.id); ids.add(ex.id); }
   assert.equal(lineCount(buildShell({ files: { a: '1\n2\n' } }), 'a'), 2);
+});
+
+/* ------------------------------------------------------------------ the script type */
+const fx = (id) => SCRIPT_FIXTURES.find((e) => e.id === id);
+
+test('script: the solution passes, the starter fails, on the setup and the variant', () => {
+  const ex = fx('fx-script-backup');
+  const sol = gradeScript(ex, ex.solution);
+  assert.deepEqual([sol.ok, sol.live, sol.variant], [true, true, true]);
+  assert.equal(runOut(sol.sh), 'Backed up 3 files');
+  assert.deepEqual(listOf(sol.sh, 'backup'), ['ideas.txt', 'plan.txt', 'todo.txt']);
+  const st = gradeScript(ex, ex.starter);
+  assert.equal(st.ok, false);
+  assert.equal(runOut(st.sh), 'Backed up 0 files');
+  // another correct route: count the copies afterwards
+  const other = '#!/bin/bash\nmkdir -p backup\ncp "$1"/*.txt backup/\necho "Backed up $(ls backup | wc -l) files"\n';
+  assert.equal(gradeScript(ex, other).ok, true, 'any script that does the job passes');
+});
+
+test('script: a hard-coded answer passes the live data and fails the variant', () => {
+  const ex = fx('fx-script-backup');
+  const fake = '#!/bin/bash\nmkdir -p backup\ncp docs/*.txt backup/\necho "Backed up 3 files"\n';
+  const g = gradeScript(ex, fake);
+  assert.deepEqual([g.live, g.variant, g.ok], [true, false, false]);
+  assert.equal(scriptReadsOutput(ex), true);
+  assert.equal(gradeScript(ex, cheatScript(ex)).ok, false);
+});
+
+test('script: runs with different input catch a hard-coded answer without a variant (exec, stdin)', () => {
+  const ex = fx('fx-script-greet');
+  assert.deepEqual(scriptCommands(ex).map((r) => r.cmd), ['./hello.sh', './hello.sh']);
+  const g = gradeScript(ex, ex.solution);
+  assert.equal(g.ok, true);
+  assert.equal(g.runs[0].cmd, 'chmod +x hello.sh', 'exec: the runner makes it executable first');
+  assert.deepEqual(g.sh.runs.map((r) => r.out), ['Hello, Ada!\n', 'Hello, Linus!\n']);
+  assert.equal(gradeScript(ex, '#!/bin/bash\necho "Hello, Linus!"\n').ok, false);
+  assert.equal(gradeScript(ex, cheatScript(ex)).ok, false);
+  assert.equal(gradeScript(ex, ex.starter).ok, false);
+});
+
+test('script: runs quote their arguments; errors and exit codes reach the checks', () => {
+  const ex = { file: 'args.sh', setup: () => {}, runs: [{ args: ['two words', 'x'] }, { args: [] }], check: () => true };
+  assert.deepEqual(scriptCommands(ex).map((r) => r.cmd), ["bash args.sh 'two words' x", 'bash args.sh']);
+  const sh = freshShell(null);
+  runScript(sh, ex, 'echo "$# [$1]"\n[ $# -gt 0 ] || { echo "usage: $0 NAME" >&2; exit 1; }\n');
+  assert.deepEqual(sh.runs.map((r) => [r.out, r.code]), [['2 [two words]\n', 0], ['0 []\n', 1]]);
+  assert.equal(runErr(sh), 'usage: args.sh NAME');
+  assert.equal(runCode(sh, 0), 0);
+  // a syntax error: what ran before it, then bash's two error lines, status 2
+  runScript(sh, { ...ex, runs: [{}] }, 'echo start\nif [ -f x ]\n  echo no\nfi\n');
+  assert.equal(runOut(sh), 'start');
+  assert.equal(runErr(sh), "args.sh: line 4: syntax error near unexpected token `fi'\nargs.sh: line 4: `fi'");
+  assert.equal(runCode(sh), 2);
+  // read -p prints no prompt when the input is piped, as in bash
+  runScript(sh, { ...ex, runs: [{ stdin: 'Bo\n' }] }, 'read -p "Name? " n\necho "Hi $n"\n');
+  assert.equal(runOut(sh), 'Hi Bo');
+  assert.equal(runErr(sh), '');
 });

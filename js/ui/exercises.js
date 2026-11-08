@@ -11,6 +11,7 @@ import { sfx } from '../sound.js';
 import { shake, reducedMotion } from './fx.js';
 import { keepFocus } from './kb.js';
 import { resolve } from './resolve.js';
+import { script } from './script.js';
 import { FileTree } from './filetree.js';
 import { freshShell, gradeShellType, outcomeOptions, VARIANT_NOTE } from '../shellex.js';
 
@@ -651,6 +652,7 @@ const RENDERERS = {
   learn, choice, fill, build, order, match, graph, outcome,
   type: (ex, ctx) => (ctx.engine === 'shell' ? typeShell(ex, ctx) : type(ex, ctx)),
   resolve: (ex, ctx) => resolve(ex, ctx, { richPrompt: prompt }),
+  script: (ex, ctx) => script(ex, ctx, { richPrompt: prompt }),   // the bash course's script editor (js/ui/script.js)
 };
 export const TYPES = Object.keys(RENDERERS);
 export function renderExercise(ex, ctx) {

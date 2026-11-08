@@ -1958,6 +1958,68 @@ body[data-screen="lesson"] .toast { top: auto; bottom: calc(var(--foot-h, 100px)
 .oc-start-tree { min-width: 0; }
 @media (max-width: 760px) { .opt.outcome-opt { padding: 8px 10px; } }
 
+/* script: the script editor (js/ui/script.js). It fills the lesson's height; the editor is the filler (the textarea
+   scrolls inside itself, never the page). Wide screens: editor left, output over files right. Narrower: question,
+   editor, then one pane (Output | Files) under it. Keyboard up on a phone (body.kb): the editor takes the room, the
+   output stays as a strip once something ran, the files wait. */
+.lesson-inner:has(.ex-script) { flex: 1 1 auto; }
+.ex-stage:has(.ex-script), .ex.ex-script { flex: 1 1 auto; }
+.ex.ex-script { max-width: 992px; }
+.ex-script > .sc-grid { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+.sc-editor { flex: 1 1 0; min-height: 150px; display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.sc-editor.right .sc-head { background: var(--green-wash); }
+.sc-editor.wrong .sc-head { background: var(--bad-wash); }
+.sc-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 18px; border-bottom: 1px solid var(--frost); }
+.sc-name { font-size: 14px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sc-acts { margin-left: auto; display: flex; gap: 6px; flex: none; }
+.sc-acts .btn.small { padding: 6px 14px; min-height: 40px; }
+.sc-run-ic { font-size: .8em; }
+.sc-body { flex: 1 1 auto; min-height: 0; display: flex; }
+.sc-gut { flex: none; margin: 0; padding: 10px 8px 10px 10px; min-width: 2.4em; text-align: right; font: 13.5px/1.6 var(--mono); color: var(--mute); background: var(--chalk); border-right: 1px solid var(--frost); overflow: hidden; user-select: none; }
+.sc-gut span { display: block; }
+textarea.sc-ta { flex: 1 1 auto; min-width: 0; margin: 0; border: 0; border-radius: 0; resize: none; padding: 10px 12px; font: 13.5px/1.6 var(--mono); background: var(--paper); color: var(--ink); white-space: pre; overflow: auto; tab-size: 2; }
+textarea.sc-ta:focus-visible { outline: 2px solid var(--iris); outline-offset: -2px; }
+textarea.sc-ta[readonly] { color: var(--mute); }
+.sc-side { flex: none; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.sc-tabs { display: flex; gap: 4px; }
+.sc-tab { border: 0; background: transparent; color: var(--mute); font-size: 12px; padding: 6px 14px; min-height: 32px; border-radius: 48px; cursor: pointer; }
+.sc-tab[aria-pressed="true"] { background: var(--frost); color: var(--ink); }
+.sc-tab:focus-visible { outline: 2px solid var(--iris); outline-offset: 1px; }
+.sc-pane { min-height: 0; display: flex; flex-direction: column; }
+.sc-side[data-view="out"] .sc-pane-files, .sc-side[data-view="files"] .sc-pane-out { display: none; }
+.sc-pane-out { height: clamp(110px, 24vh, 220px); }
+.sc-pane-files { height: clamp(110px, 24vh, 220px); padding: 10px 14px; gap: 4px; }
+.sc-pane-title { flex: none; font-size: 11px; text-transform: uppercase; color: var(--mute); }
+.sc-files { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.sc-out { flex: 1 1 auto; min-height: 0; overflow: auto; background: var(--term-bg); color: var(--term-fg); outline: 1px solid var(--term-edge); outline-offset: -1px; border-radius: 20px; padding: 12px 16px; font: 12.5px/1.5 var(--mono); }
+.sc-out:focus-visible { outline: 2px solid var(--iris); outline-offset: 2px; }
+.sc-out .ln.cmd:not(:first-child) { margin-top: 8px; }
+.sc-out .sc-code { color: var(--term-quiet); font-size: 11px; }
+.sc-out .sc-code.bad { color: var(--term-err); }
+.sc-editor .sc-syms { display: none; }
+@media (min-width: 900px) {
+  .ex-script > .sc-grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 16px; min-height: 300px; }
+  .sc-editor { min-height: 0; }
+  .sc-tabs { display: none; }
+  .sc-side { gap: 12px; }
+  .sc-side[data-view] .sc-pane { display: flex; height: auto; }
+  .sc-pane-out { flex: 1 1 0; }
+  .sc-pane-files { flex: 1 1 0; }
+}
+@media (max-width: 760px) {
+  .ex-script .ex-prompt { font-size: clamp(18px, 2.7vh, 22px); }
+  .sc-head { padding-left: 14px; }
+  .sc-gut, textarea.sc-ta { font-size: 13px; }
+  .sc-editor:focus-within .sc-syms { display: flex; padding: 6px 8px; background: var(--term-bg); }
+}
+.kb .ex-script > .sc-grid { gap: 6px; }
+.kb .ex-script .ex-prompt { font-size: 15px; }
+.kb .sc-editor { min-height: 90px; }
+.kb .sc-head { padding-block: 2px; }
+.kb .sc-tabs, .kb .sc-pane-files { display: none; }
+.kb .sc-side:not(:has(.sc-out.has-out)) { display: none; }
+.kb .sc-side .sc-pane-out { display: flex; height: auto; max-height: calc(var(--vvh, 60vh) * .24); }
+
 /* placement for a newly opened course (Settings > Switch course) */
 .placement .onb-opts { margin-top: 12px; }
 .place-opt { width: 100%; }
