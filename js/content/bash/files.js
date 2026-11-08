@@ -167,6 +167,12 @@ export default {
           explain: 'A folder as the target means "move it in there". The file keeps its name and leaves home.',
         },
         {
+          id: 'ff2-order', type: 'order',
+          prompt: 'Keep a copy of <code>report.txt</code> in a new folder <code>old</code>, then rename the original to <code>final.txt</code>. Put the commands in order.',
+          steps: ['mkdir old', 'cp report.txt old/', 'mv report.txt final.txt'],
+          explain: 'The folder has to exist before you copy into it, and the copy has to happen while <code>report.txt</code> still has its old name.',
+        },
+        {
           id: 'ff2-type-rename', type: 'type',
           prompt: 'Rename <code>draft.txt</code> to <code>final.txt</code>.',
           setup: desk(),
