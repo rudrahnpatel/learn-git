@@ -824,7 +824,9 @@ test('script errors carry the file name and line number', () => {
   assert.equal(r.code, 0, 'a script carries on after a failed command and returns the last status');
   assert.equal(sh.lastOut, 'start\nafter\n');
   assert.equal(sh.lastErr, './broken.sh: line 3: nosuchcmd: command not found\n');
-  assert.equal(err(sh, './syntax.sh', 2), "./syntax.sh: line 5: syntax error near unexpected token `fi'\n");
+  // as in bash: the lines before the error run, then the error and the offending line
+  assert.equal(err(sh, './syntax.sh', 2), "./syntax.sh: line 5: syntax error near unexpected token `fi'\n./syntax.sh: line 5: `fi'\n");
+  assert.equal(sh.lastOut, 'a\n');
   assert.match(err(sh, './crlf.sh', 126), /\/bin\/bash\^M: bad interpreter/);
   assert.equal(err(sh, './py.sh', 127), "/usr/bin/env: 'python3': No such file or directory\n");
   assert.equal(err(sh, './bad.sh', 126), 'bash: ./bad.sh: /bin/bsh: bad interpreter: No such file or directory\n');

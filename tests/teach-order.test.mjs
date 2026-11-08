@@ -27,6 +27,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { UNITS } from '../js/content/index.js';
 import { UNITS as BASH_UNITS } from '../js/content/bash/index.js';
+import { SCRIPT_FIXTURES } from './fixtures/script-exercises.mjs';
 import { Shell } from '../js/shell.js';
 
 // Items any exercise may use without a learn card. Keep this short and say why.
@@ -231,9 +232,16 @@ test('the parser reads commands, flags and revision syntax', () => {
 // `&&` and `;` are only needed where they can't be split (a build tile, a fill, an outcome command): a typed answer
 // can always be two lines. Concept tags (`teaches`/`needs`) work exactly as in the git course. Each unit's challenge
 // puzzles count as coming after its lessons (where the path puts them).
+// Scripts (the `script` type's `solution`, units 9+): `kw if`, `kw for`, `kw while`, `kw until`, `kw function` (both
+// `name() {` and `function name`), `op <<` (a here-doc; its body is data, not commands), the commands inside `$( )`,
+// a `#` comment ends the line, and a command after a keyword (`then ls`, `do cp …`) or an assignment
+// (`n=$(wc -l < f)`) is a command too. Words after `for x in` are a list, not commands.
 const BASH_CMDS = new Set(new Shell().completions().shell);
-const OPS = ['2>&1', '<<<', '&>>', '2>>', '&>', '2>', '>>', '&&', '||', '>', '<', '|', ';'];
-const REDIRS = new Set(['>', '>>', '<', '<<<', '2>', '2>>', '&>', '&>>', '2>&1']);
+const OPS = ['2>&1', '<<<', '&>>', '2>>', '&>', '2>', '>>', '<<-', '<<', '&&', '||', '>', '<', '|', ';'];
+const REDIRS = new Set(['>', '>>', '<', '<<<', '<<', '<<-', '2>', '2>>', '&>', '&>>', '2>&1']);
+// reserved words: the ones that open a construct become items; after any of them a command follows
+const KW_ITEM = { if: 'kw if', elif: 'kw if', for: 'kw for', while: 'kw while', until: 'kw until', function: 'kw function' };
+const KW_THEN_CMD = new Set(['if', 'then', 'elif', 'else', 'fi', 'do', 'done', 'while', 'until', '!', '{', '}']);
 // a line as words and operators, quotes kept inside the words
 export function bashTokens(line) {
   const out = [];
@@ -242,6 +250,12 @@ export function bashTokens(line) {
   const push = () => { if (inWord) out.push({ w: cur }); cur = ''; inWord = false; };
   while (i < s.length) {
     const c = s[i];
+    if (c === '#' && !inWord) break;   // a comment runs to the end of the line
+    if (c === '$' && s[i + 1] === '(') {   // $( … ) stays one word, spaces and all
+      let d = 0, j = i + 1;
+      for (; j < s.length; j++) { if (s[j] === '(') d++; else if (s[j] === ')' && --d === 0) break; }
+      cur += s.slice(i, j + 1); inWord = true; i = j + 1; continue;
+    }
     if (c === '\\' && i + 1 < s.length) { cur += c + s[i + 1]; inWord = true; i += 2; continue; }
     if (c === '"' || c === "'") { const j = s.indexOf(c, i + 1); const end = j < 0 ? s.length : j + 1; cur += s.slice(i, end); inWord = true; i = end; continue; }
     if (/\s/.test(c)) { push(); i++; continue; }
@@ -253,7 +267,10 @@ export function bashTokens(line) {
   return out;
 }
 function wordItems(w, out) {
-  const unq = w.replace(/"[^"]*"|'[^']*'/g, (m) => { out.add(m[0] === '"' ? 'quote "' : "quote '"); return 'Q'; });
+  // $( … ) and back-quotes: the commands inside are needed too
+  for (const m of w.matchAll(/\$\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g)) if (!m[1].startsWith('(')) for (const x of bashItems(m[1])) out.add(x);
+  for (const m of w.matchAll(/`([^`]*)`/g)) for (const x of bashItems(m[1])) out.add(x);
+  const unq = w.replace(/"[^"]*"|'[^']*'/g, (m) => { out.add(m[0] === '"' ? 'quote "' : "quote '"); if (m[0] === '"' && /\$[\w{]/.test(m)) out.add('var $'); return 'Q'; });
   if (/\\ /.test(unq)) out.add('escape \\');
   const bare = unq.replace(/\\./g, 'E');
   if (/\*/.test(bare)) out.add('glob *');
@@ -279,17 +296,32 @@ function bashFlagItems(cmd, t) {
 // The items in some command lines (needed by an exercise, or taught by a learn card).
 export function bashItems(text, { splitOps = true } = {}) {
   const out = new Set();
+  let doc = null;   // a here-doc's delimiter: its body lines are data
   for (const raw of decode(String(text)).split('\n')) {
-    let start = true, cmd = null, prev = null;
+    if (doc) { if (raw.replace(doc.strip ? /^\t+/ : /^$/, '') === doc.delim) doc = null; continue; }
+    let start = true, cmd = null, prev = null, list = false, fname = false;
     for (const t of bashTokens(raw.trim().replace(/^\$\s+/, ''))) {
       if (t.op) {
-        if (splitOps || !['&&', ';'].includes(t.op)) out.add(`op ${t.op}`);
-        if (!REDIRS.has(t.op)) { start = true; cmd = null; }
+        if (splitOps || !['&&', ';'].includes(t.op)) out.add(`op ${t.op.replace('<<-', '<<')}`);
+        if (!REDIRS.has(t.op)) { start = true; cmd = null; list = false; }
         prev = t.op; continue;
       }
       const w = t.w;
+      if (prev === '<<' || prev === '<<-') { doc = { delim: w.replace(/['"\\]/g, ''), strip: prev === '<<-' }; prev = w; continue; }
       if (REDIRS.has(prev)) { wordItems(w, out); prev = w; continue; }   // a redirect's file name
+      if (list === 'name') { if (w === 'in') list = true; prev = w; continue; }   // for x in
+      if (list) { wordItems(w, out); prev = w; continue; }               // for x in <list>
+      if (fname) { fname = false; prev = w; continue; }   // function NAME {
       if (start) {
+        if (KW_ITEM[w] || KW_THEN_CMD.has(w)) {
+          if (KW_ITEM[w]) out.add(KW_ITEM[w]);
+          if (w === 'for') list = 'name';
+          else if (w === 'function') fname = true;
+          prev = w; continue;
+        }
+        if (/^[A-Za-z_]\w*\(\)$/.test(w)) { out.add('kw function'); prev = w; continue; }   // name() {
+        const asg = /^[A-Za-z_]\w*\+?=(.*)$/s.exec(w);
+        if (asg) { wordItems(asg[1], out); prev = w; continue; }                       // x=… cmd: still at the start
         start = false;
         cmd = BASH_CMDS.has(w) ? w : null;
         if (cmd) { out.add(`cmd ${w}`); prev = w; continue; }
@@ -337,6 +369,8 @@ export function bashNeededBy(ex) {
   for (const s of codeSpans(ex.prompt)) addAny(s);
   switch (ex.type) {
     case 'type': addAll(ex.solution, { splitOps: false }); break;
+    // a script's lines: the learner reads the starter and writes the solution (`;` and `&&` count: a file can't split)
+    case 'script': addAll(ex.starter || ''); addAll(ex.solution); break;
     case 'build': addAll(ex.answers[0].join(' ')); break;
     case 'fill': addAll(ex.before + String(ex.options[ex.answer]).replace(/<[^>]+>/g, '') + ex.after); break;
     case 'outcome': addAll(ex.command); break;
@@ -402,4 +436,22 @@ test('bash: the parser reads commands, flags, operators, globs and paths', () =>
   assert.deepEqual(s('Lists the folder'), []);
   assert.deepEqual(s('rm my\\ file.txt'), ['cmd rm', 'escape \\']);
   assert.deepEqual(s('$ echo hi > a.txt'), ['cmd echo', 'op >']);
+});
+
+test('bash: the parser reads scripts: keywords, commands after them, $( ), here-docs, comments', () => {
+  const s = (t, o) => [...bashItems(t, o)].sort();
+  assert.deepEqual(s('if [ -f "$1" ]; then\n  wc -l < "$1"\nelif [ -d "$1" ]; then ls "$1"\nelse echo no; fi'),
+    ['[ -d', '[ -f', 'cmd [', 'cmd echo', 'cmd ls', 'cmd wc', 'kw if', 'op ;', 'op <', 'quote "', 'var $', 'wc -l']);
+  assert.deepEqual(s('for f in *.txt; do mv "$f" "${f%.txt}.md"; done', { splitOps: false }), ['cmd mv', 'glob *', 'kw for', 'quote "', 'var $']);
+  assert.deepEqual(s('while read -r line; do echo "$line"; done < list.txt', { splitOps: false }), ['cmd echo', 'cmd read', 'kw while', 'op <', 'quote "', 'read -r', 'var $']);
+  assert.deepEqual(s('n=$(grep -c ERROR log.txt) # count them\necho $n'), ['cmd echo', 'cmd grep', 'grep -c', 'var $']);
+  assert.deepEqual(s('greet() {\n  local who=$1\n  return 0\n}\nfunction bye { echo bye; }'), ['cmd echo', 'cmd local', 'cmd return', 'kw function', 'op ;', 'var $']);
+  assert.deepEqual(s('cat > notes.txt <<EOF\nrm -rf everything | here\nEOF\nls'), ['cmd cat', 'cmd ls', 'op <<', 'op >']);
+  assert.deepEqual(s('#!/bin/bash\n# a comment with ls in it\nset -e'), ['cmd set', 'set -e']);
+});
+
+test('bash: a script exercise needs what its starter and solution use', () => {
+  const need = [...bashNeededBy(SCRIPT_FIXTURES.find((e) => e.id === 'fx-script-backup'))];
+  for (const x of ['cmd mkdir', 'mkdir -p', 'cmd cp', 'cmd echo', 'kw for', 'glob *', 'quote "', 'var $']) assert.ok(need.includes(x), `needs ${x}`);
+  assert.ok(!need.some((x) => /^cmd (count|f|backup)\b/.test(x)), 'no variable or file name is read as a command');
 });

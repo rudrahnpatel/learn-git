@@ -71,3 +71,9 @@ export const filesUnder = (sh, p) => {
   if (sh.s.nodes[dir]?.type !== 'dir') return [];
   return sh.fs.descendants(dir).filter((x) => sh.s.nodes[x].type === 'file').map((x) => x.slice(dir.length + 1));
 };
+// script exercises (js/shellex.js runScript): run i's stdout / stderr / exit status (i = -1 for the last run)
+const runAt = (sh, i) => (sh.runs || []).at(i);
+export const runOut = (sh, i = -1) => trimEnd(runAt(sh, i)?.out);
+export const runErr = (sh, i = -1) => trimEnd(runAt(sh, i)?.err);
+export const runCode = (sh, i = -1) => runAt(sh, i)?.code;
+export const runOutIs = (sh, i, text) => { const r = runAt(sh, i); return !!r && lines(r.out).join('\n') === lines(Array.isArray(text) ? text.join('\n') : text).join('\n'); };

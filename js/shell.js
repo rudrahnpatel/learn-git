@@ -144,17 +144,20 @@ export class Shell {
   hint(text) { this._flush(); for (const t of String(text).split('\n')) this.out.push({ t, c: 'hint' }); }
   errPrefix() { return this.frame.script ? `${this.frame.script}: line ${this.curLine}` : 'bash'; }
   shErr(io, msg) { io.err.write(`${this.errPrefix()}: ${msg}\n`); }
+  // set -x's prefix: one + per level of $(…) nesting, like bash's PS4
+  ps4() { return '+'.repeat(1 + (this.substDepth || 0)) + ' '; }
 
   /* ------------------------------------------------------------ running */
   // Run one command line. opts.stdin: text a learner "types" for commands that read input (read, cat).
-  run(input, { stdin = null } = {}) {
+  // opts.tty: false makes that text behave like piped input (`printf … | cmd`): `read -p` shows no prompt.
+  run(input, { stdin = null, tty = true } = {}) {
     this.out = []; this.events = []; this._partial = null; this._stdout = ''; this._stderr = '';
     this.steps = 0;
     this.tick(60);
     const line = String(input);
     this._currentLine = line.trim();
     const termOut = new TermSink(this, ''), termErr = new TermSink(this, 'err');
-    const io = { stdin: stdin != null ? new Input(stdin, { tty: true }) : null, out: termOut, err: termErr };
+    const io = { stdin: stdin != null ? new Input(stdin, { tty }) : null, out: termOut, err: termErr };
     let code = 0;
     try {
       const ast = parse(line);
@@ -169,7 +172,7 @@ export class Shell {
     this.s.status = code;
     this._flush();
     this._announceJobs();
-    this.depth = 0; this.loopDepth = 0; this.condDepth = 0;
+    this.depth = 0; this.loopDepth = 0; this.condDepth = 0; this.substDepth = 0;
     if (line.trim()) this.history.push(line.trim());
     this.lastOut = this._stdout; this.lastErr = this._stderr; this.lastCode = code;
     return { lines: this.out, ok: code === 0, code, events: this.events };
@@ -262,6 +265,7 @@ export class Shell {
         catch (e) { if (e instanceof ExpandError) { this.shErr(io, e.message); return e.code; } throw e; }
         let status = 0;
         for (const it of items) {
+          if (this.opts.xtrace) io.err.write(`${this.ps4()}for ${node.name} in ${items.map(shQuote).join(' ')}\n`);
           this.setVar(node.name, it);
           const r = this.loopBody(node.body, io);
           status = r.status;
@@ -305,13 +309,18 @@ export class Shell {
       argv = expandWords(this, node.words);
       assigns = node.assigns.map((a) => ({ name: a.name, value: (a.append ? this.getVar(a.name) ?? '' : '') + expandString(this, a.value) }));
     } catch (e) {
-      if (e instanceof ExpandError) { this.shErr(io, e.message); return e.code; }
+      if (e instanceof ExpandError) {
+        this.shErr(io, e.message);
+        // set -u: a non-interactive shell (a script) stops at an unset variable, as bash does
+        if (e.unbound && !this.frame.interactive) throw new ExitSignal(1);
+        return e.code;
+      }
       throw e;
     }
     const subStatus = this._subStatus;
     this._subStatus = undefined;
     if (!argv.length) {
-      if (this.opts.xtrace) for (const a of assigns) io.err.write(`+ ${a.name}=${shQuote(a.value)}\n`);
+      if (this.opts.xtrace) for (const a of assigns) io.err.write(`${this.ps4()}${a.name}=${shQuote(a.value)}\n`);
       for (const a of assigns) this.setVar(a.name, a.value);
       const io2 = this.redirect(node.redirs, io);
       if (!io2) return 1;
@@ -327,7 +336,7 @@ export class Shell {
       try { return this.evalString(this.s.aliases[name] + ' ' + argv.slice(1).map(shQuote).join(' '), io2); }
       finally { this._aliasing.delete(name); }
     }
-    if (this.opts.xtrace) io.err.write('+ ' + [...assigns.map((a) => `${a.name}=${shQuote(a.value)}`), ...argv.map(shQuote)].join(' ') + '\n');
+    if (this.opts.xtrace) io.err.write(this.ps4() + [...assigns.map((a) => `${a.name}=${shQuote(a.value)}`), ...argv.map(shQuote)].join(' ') + '\n');
     const io2 = this.redirect(node.redirs, io);
     if (!io2) return 1;
     return this.invoke(argv, io2, assigns);
@@ -345,13 +354,14 @@ export class Shell {
     const sink = new BufSink();
     const saved = this.saveScope();
     let status = 0;
+    this.substDepth = (this.substDepth || 0) + 1;
     try {
       const ast = parse(src);
       status = this.execList(ast, { stdin: null, out: sink, err: this._errSink || new TermSink(this, 'err') });
     } catch (e) {
       if (e instanceof SyntaxErr) throw new ExpandError(e.message, 2);
       if (e instanceof ExitSignal) status = e.code; else throw e;
-    } finally { this.restoreScope(saved); }
+    } finally { this.restoreScope(saved); this.substDepth--; }
     this._subStatus = status;
     this.s.status = status;
     return sink.text.replace(/\n+$/, '');
@@ -452,14 +462,23 @@ export class Shell {
       if (!['bash', 'sh'].includes(basename(prog))) { this.shErr(io, `${shown}: ${basename(prog)} scripts can't run in this sandbox (only bash)`); return 126; }
     }
     if (this.depth >= LIMITS.depth) { this.shErr(io, `${shown}: maximum nesting level exceeded (sandbox limit)`); return 1; }
-    let ast;
+    // bash reads a script one command at a time, so the lines before a syntax error still run; the error is
+    // reported when the reader gets to it (if nothing before it exited)
+    let ast, syn = null;
     try { ast = parse(text); }
-    catch (e) { if (e instanceof SyntaxErr) { io.err.write(`${shown}: line ${e.line}: ${e.message}\n`); return 2; } throw e; }
+    catch (e) { if (!(e instanceof SyntaxErr)) throw e; syn = e; ast = parsePrefix(text, e.line); }
+    const finish = (status) => {
+      if (!syn) return status;
+      io.err.write(`${shown}: line ${syn.line}: ${syn.message}\n`);
+      const src = text.split('\n')[syn.line - 1];
+      if (/^syntax error near/.test(syn.message) && src !== undefined) io.err.write(`${shown}: line ${syn.line}: \`${src}'\n`);
+      return 2;
+    };
     const savedFrame = this.frame, savedLine = this.curLine, savedLoop = this.loopDepth;
     if (source) {
       this.frame = { ...savedFrame, args: args.length ? args : savedFrame.args, sourced: true };
       this.depth++;
-      try { return this.execList(ast, io); }
+      try { return finish(this.execList(ast, io)); }
       catch (e) { if (e instanceof ReturnSignal) return e.code; throw e; }
       finally { this.depth--; this.frame = savedFrame; this.curLine = savedLine; }
     }
@@ -471,7 +490,7 @@ export class Shell {
     this.s.opts = { errexit: false, xtrace, nounset: false, noglob: false };
     this.frame = { args, arg0: shown, script: shown, interactive: false, locals: null, func: null };
     this.depth++; this.loopDepth = 0;
-    try { return this.execList(ast, io); }
+    try { return finish(this.execList(ast, io)); }
     catch (e) {
       if (e instanceof ExitSignal) return e.code;
       if (e instanceof ReturnSignal) return e.code;
@@ -712,6 +731,17 @@ function describe(node) {
 }
 
 // Build a ready shell for an exercise: buildShell({ files, cwd, env, procs, clock }).
+// The complete commands before a script's syntax error at line `line`: the longest run of whole lines before it
+// that parses (a line ending in a backslash continues into the next one, so it can't end the run).
+function parsePrefix(text, line) {
+  const lines = text.split('\n');
+  for (let k = Math.min((line || 1) - 1, lines.length); k > 0; k--) {
+    if (/\\$/.test(lines[k - 1])) continue;
+    try { return parse(lines.slice(0, k).join('\n')); } catch (e) { if (!(e instanceof SyntaxErr)) throw e; }
+  }
+  return { type: 'list', items: [] };
+}
+
 export function buildShell({ files = {}, cwd = null, env = {}, procs = [], clock = null, setup = null } = {}) {
   const sh = new Shell(null, { clock });
   sh.setupFiles(files);

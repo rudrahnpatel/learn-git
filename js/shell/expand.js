@@ -153,7 +153,7 @@ function paramValue(sh, part) {
   const set = raw !== undefined;
   const val = raw ?? '';
   if (!op) {
-    if (!set && sh.opts.nounset && !/^[?#@*$!0-]$/.test(name)) throw new ExpandError(`${name}: unbound variable`);
+    if (!set && sh.opts.nounset && !/^[?#@*$!0-]$/.test(name)) throw Object.assign(new ExpandError(`${/^\d/.test(name) ? '$' : ''}${name}: unbound variable`), { unbound: true });
     return val;
   }
   const arg = () => expandString(sh, { parts: wordParts(part.arg ?? '') });
@@ -187,6 +187,10 @@ function paramValue(sh, part) {
       }
       return val;
     }
+    case '^^': return val.toUpperCase();
+    case '^': return val.charAt(0).toUpperCase() + val.slice(1);
+    case ',,': return val.toLowerCase();
+    case ',': return val.charAt(0).toLowerCase() + val.slice(1);
     case '/': case '//': {
       const a = part.arg ?? '';
       const slash = a.indexOf('/');
