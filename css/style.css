@@ -98,7 +98,7 @@ b, strong, th, h1, h2, h3, h4, summary { font-weight: 400; }
 h1, h2, h3, p { margin: 0; }
 h1 { font-size: 52px; line-height: 1.02; letter-spacing: -0.025em; }
 h2 { font-size: 35px; line-height: 1.06; letter-spacing: -0.012em; }
-h3 { font-size: 22px; line-height: 1.15; letter-spacing: -0.008em; }
+h3, h2.h3 { font-size: 22px; line-height: 1.15; letter-spacing: -0.008em; }
 a { color: var(--iris-text); }
 code, pre, kbd { font-family: var(--mono); letter-spacing: 0; }
 code { font-size: .82em; background: var(--frost); border-radius: 16px; padding: .1em .5em; white-space: nowrap; }
@@ -112,7 +112,16 @@ code .tok { white-space: nowrap; }   /* js/ui/codewrap.js: commands wrap only at
 .hidden { display: none !important; }
 .skip { position: absolute; left: -999px; }
 .skip:focus { left: 8px; top: 8px; z-index: 100; background: var(--paper); padding: 8px 14px; border-radius: 48px; }
-:focus-visible { outline: 2px solid var(--iris); outline-offset: 2px; }
+/* Focus ring (accessibility pass, .notes/accessibility-pass.md): the style guide's 2px ring with a 2px gap, in
+   --iris-text so it keeps 3:1 on the dark canvas and follows a bought accent. The ring outlines the element's own
+   pill/card radius, so it reads as one more paper layer. */
+:focus-visible { outline: 2px solid var(--iris-text); outline-offset: 2px; }
+/* headings and screens that take the focus on a route change or a new exercise: no ring, the screen reader reads them */
+h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus, h3[tabindex="-1"]:focus, [tabindex="-1"].focus-quiet:focus { outline: none; }
+/* text for screen readers only */
+.sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
+/* the sticky top bar never hides the focused control (WCAG 2.4.11) */
+html { scroll-padding-top: 84px; }
 #app { position: relative; z-index: 1; min-height: 100dvh; outline: none; }
 #modal-root { position: relative; z-index: 50; }
 
@@ -719,7 +728,7 @@ body[data-screen="lesson"] .shape, body[data-screen="challenge"] .shape { opacit
 /* concept + hints: one flat card of two collapsed rows (no shadow, a hairline between) */
 .ch-help { padding: 0; box-shadow: none; }
 .hint-card { border-top: 1px solid var(--frost); padding: 6px 8px 8px; }
-.hint-card h3 { font-size: 17px; padding: 8px 12px 0; }
+.hint-card h3, .hint-card h2 { font-size: 17px; padding: 8px 12px 0; }
 .hint-card .hint-btn { font-size: 17px; padding: 8px 12px; }
 .hint-card .hints { margin: 4px 12px 8px; }
 .hints { margin: 12px 0 0; padding-left: 1.3em; display: grid; gap: 8px; font-size: 16px; }
@@ -1629,7 +1638,7 @@ body[data-screen="lesson"] .toast { top: auto; bottom: calc(var(--foot-h, 100px)
 .card-search-row { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
 .card-search { flex: 1 1 260px; max-width: 480px; background: var(--chalk); border: 1px solid var(--frost); border-radius: 48px; padding: 12px 18px; font: 400 16px var(--sans); color: var(--ink); }
 .card-search::placeholder { color: var(--mute); }
-.card-search:focus { outline: 2px solid var(--iris); outline-offset: 2px; }
+.card-search:focus { outline: 2px solid var(--iris-text); outline-offset: 2px; }
 .own-toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 15px; cursor: pointer; }
 .own-toggle input { width: 20px; height: 20px; accent-color: var(--iris); }
 .card-groups { display: flex; flex-direction: column; gap: 36px; }
@@ -1752,3 +1761,13 @@ body[data-screen="lesson"] .toast { top: auto; bottom: calc(var(--foot-h, 100px)
   .nudge .modal-actions .btn { flex: 1 1 auto; }
 }
 @media (prefers-reduced-motion: reduce) { .acct-status .acct-dot { animation: none !important; } }
+
+
+/* ------------------------------------------------------------ accessibility pass
+   (.notes/accessibility-pass.md). Keyboard affordances that fit the paper-cut look: the same 2px ring. */
+/* the three-trees file name is the keyboard's way to expand a row */
+.tname { background: none; border: 0; padding: 0 2px; margin: 0 -2px; font: inherit; color: inherit; letter-spacing: inherit; text-align: left; cursor: pointer; border-radius: 16px; overflow-wrap: anywhere; }
+/* the speed round's input has no ring of its own (.term-in): the pill around it shows the focus */
+.speed-form:has(.speed-in:focus-visible) { outline: 2px solid var(--iris-text); outline-offset: 2px; }
+/* a graded graph option keeps its ring when focused (the right/wrong `outline: 0` rules would remove it) */
+.opt.graph-opt.right:focus-visible, .opt.graph-opt.wrong:focus-visible { outline: 2px solid var(--iris-text); outline-offset: 2px; }

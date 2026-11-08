@@ -8,7 +8,7 @@ import { GraphView } from '../graph.js';
 import { TreesView } from '../trees.js';
 import { Terminal } from '../terminal.js';
 import { openSurgeon, openRebaseTodo, openEditor } from '../panels.js';
-import { h, confirmModal } from '../dom.js';
+import { h, confirmModal, announce } from '../dom.js';
 import { sandboxStore, historyStore, viewStore } from '../storage.js';
 import { sfx } from '../sound.js';
 import { ICON, setShapes, confetti } from './fx.js';
@@ -75,7 +75,7 @@ export function renderChallenge(root, level, opts = {}) {
   const movesPill2 = h('span', { class: 'tag-pill mono moves-pill phone-only' }); // phones: the count lives in the goal sheet
   const goalCard = h('section', { class: 'card goal-card' },
     h('div', { class: 'goal-tags' }, h('span', { class: 'tag-pill mono goal-tag' }, level.sandbox ? 'THINGS TO TRY' : 'GOAL'), level.sandbox ? null : movesPill2),
-    h('p', { class: 'goal-text', html: level.goal }),
+    h('p', { class: 'goal-text', id: 'ch-goal', html: level.goal }),
     level.sandbox ? null : checklist,
     targetBox);
   // the concept and the hints share one quiet card: two collapsed rows under the goal
@@ -83,7 +83,7 @@ export function renderChallenge(root, level, opts = {}) {
     h('summary', {}, h('span', {}, 'What\'s going on here?'), h('span', { class: 'chev', 'aria-hidden': 'true' }, '+')),
     h('p', { html: level.concept }));
   const hintCard = h('section', { class: 'hint-card', 'aria-label': 'Hints' },
-    level.sandbox ? h('h3', {}, 'Hints') : hintBtn, hintList);
+    level.sandbox ? h('h2', {}, 'Hints') : hintBtn, hintList);
   const helpCard = h('div', { class: 'card ch-help' }, conceptCard, hintCard);
 
   /* ---- graph, terminal, trees */
@@ -100,7 +100,7 @@ export function renderChallenge(root, level, opts = {}) {
   const termCard = h('section', { class: 'term-card', 'aria-label': 'Terminal' });
   const treesBody = h('div', { class: 'trees' });
   const treesCard = h('section', { class: 'card trees-card' + (treesOpen ? '' : ' hidden'), 'aria-label': 'Three trees' },
-    h('div', { class: 'card-head' }, h('h3', {}, 'The three trees'), h('span', { class: 'muted small' }, 'tap a file to expand')), treesBody);
+    h('div', { class: 'card-head' }, h('h2', { class: 'h3' }, 'The three trees'), h('span', { class: 'muted small' }, 'tap a file to expand')), treesBody);
   const toggleTrees = () => {
     treesOpen = !treesOpen;
     treesCard.classList.toggle('hidden', !treesOpen);
@@ -142,7 +142,7 @@ export function renderChallenge(root, level, opts = {}) {
 
   const left = h('div', { class: 'ch-left', id: 'ch-goal-sheet' }, goalCard, helpCard);
   const right = h('div', { class: 'ch-right' }, pane, h('div', { class: 'trees-row' }, treesToggle), treesCard);
-  const screen = h('div', { class: 'challenge' + (level.sandbox ? ' sandbox' : '') }, head, h('div', { class: 'ch-grid' }, left, right));
+  const screen = h('div', { class: 'challenge' + (level.sandbox ? ' sandbox' : '') }, head, h('main', { class: 'ch-grid' }, left, right));
   root.replaceChildren(screen);
 
   // typing needs the terminal: a commit tapped in Graph view, a key pressed, or the input focused brings back Split
@@ -170,6 +170,8 @@ export function renderChallenge(root, level, opts = {}) {
     onHistory: (hist) => historyStore.save(hist),
   });
   drawHints();
+  // the terminal takes the focus on a desktop: the goal is its description, so a screen reader hears the task first
+  term.input.setAttribute('aria-describedby', `ch-goal ${term.input.getAttribute('aria-describedby') || ''}`.trim());
   term.input.addEventListener('focus', () => { toTyping(); peek(false); });
   work.addEventListener('pointerdown', () => { if (screen.classList.contains('goal-peek')) peek(false); });
   if (narrow() && !level.sandbox) peek(true); // a challenge opens with its goal showing
@@ -244,7 +246,7 @@ export function renderChallenge(root, level, opts = {}) {
       : !used.has(c.trim());
     return [...list.filter(fits), ...list.filter((c) => !fits(c))];
   }
-  let lastOk = 0;
+  let lastOk = 0, doneLabels = new Set();
   function refresh(animate = true) {
     graph.render(repo.graphData(), { animate, showGhosts });
     if (treesOpen) trees.render(repo);
@@ -256,8 +258,14 @@ export function renderChallenge(root, level, opts = {}) {
     const results = level.check(repo);
     const okCount = results.filter(([, ok]) => ok).length;
     goalMini.querySelector('.gm-n').textContent = results.length ? `${okCount}/${results.length}` : '';
-    checklist.replaceChildren(...results.map(([label, ok]) => h('li', { class: ok ? 'ok' : '' }, h('span', { class: 'tick', html: ok ? ICON.check() : '' }), h('span', {}, label))));
-    if (animate && okCount > lastOk) sfx.pop();
+    checklist.replaceChildren(...results.map(([label, ok]) => h('li', { class: ok ? 'ok' : '' }, h('span', { class: 'tick', html: ok ? ICON.check() : '' }), h('span', {}, label), h('span', { class: 'sr-only' }, ok ? ' (done)' : ' (not yet)'))));
+    if (animate && okCount > lastOk) {
+      sfx.pop();
+      // after the terminal output has been read: which goal just got ticked
+      const fresh = results.filter(([, ok]) => ok).map(([l]) => l).filter((l) => !doneLabels.has(l));
+      if (fresh.length && okCount < results.length) setTimeout(() => announce(`Goal ${okCount} of ${results.length} done: ${fresh.join(', ')}.`), 400);
+    }
+    doneLabels = new Set(results.filter(([, ok]) => ok).map(([l]) => l));
     lastOk = okCount;
     movesPill.textContent = movesPill2.textContent = level.kind === 'bisect' ? `${bisectTests} TESTS · ${moves} MOVES` : `${moves} MOVES · PAR ${parOf(level)}`;
     if (!completed && results.length && results.every(([, ok]) => ok)) { completed = true; setTimeout(() => complete(), 650); }
@@ -285,7 +293,7 @@ export function renderChallenge(root, level, opts = {}) {
       return {
         el: h('div', { class: 'cel-body' }, t.el,
           h('h1', { class: 'cel-title' }, level.arcade ? 'Bug found!' : 'Challenge complete!'),
-          h('div', { class: 'star-row' }, starEls),
+          h('div', { class: 'star-row' }, starEls, h('span', { class: 'sr-only' }, `${stars} of 3 stars`)),
           h('div', { class: 'stat-row' }, h('div', { class: 'stat-card c-yellow' }, h('span', { class: 'stat-label mono' }, 'XP'), h('div', { class: 'stat-val' }, `+${xpEvent.gained}`))),
           h('p', { class: 'cel-sub mono small' }, line),
           level.debrief ? h('div', { class: 'card debrief' }, h('span', { class: 'tag-pill mono' }, 'WHAT YOU JUST LEARNED'), h('p', { html: level.debrief })) : null),

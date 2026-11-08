@@ -5,7 +5,7 @@ import { APP } from '../brand.js';
 import { sfx } from '../sound.js';
 import { renderExercise } from './exercises.js';
 import { twigSVG } from './twig.js';
-import { ICON, shake, flyUp, toast, setShapes } from './fx.js';
+import { ICON, shake, flyUp, toast, setShapes, glide } from './fx.js';
 import * as game from './game.js';
 import { watchKeyboard } from './kb.js';
 
@@ -25,10 +25,14 @@ export function playSession(root, { title, items, mode = 'lesson', onFinish, onQ
 
   /* ---- chrome */
   const fill = h('div', { class: 'pbar-fill' });
-  const bar = h('div', { class: 'pbar', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': String(total) }, fill, h('div', { class: 'pbar-shine' }));
-  const comboEl = h('div', { class: 'combo', 'aria-live': 'polite' });
-  const quitBtn = h('button', { class: 'icon-btn round quit', 'aria-label': 'Quit lesson', html: ICON.close(), onclick: () => quit() });
-  const top = h('header', { class: 'lesson-top' }, quitBtn, bar, comboEl);
+  const bar = h('div', { class: 'pbar', role: 'progressbar', 'aria-label': 'Lesson progress', 'aria-valuemin': '0', 'aria-valuemax': String(total) }, fill, h('div', { class: 'pbar-shine' }));
+  // the flame is decoration: the combo milestones are spoken by their toast
+  const comboEl = h('div', { class: 'combo', 'aria-hidden': 'true' });
+  const quitBtn = h('button', { class: 'icon-btn round quit', type: 'button', 'aria-label': 'Quit lesson', html: ICON.close(), onclick: () => quit() });
+  const top = h('header', { class: 'lesson-top' },
+    h('h1', { class: 'sr-only' }, title),
+    h('p', { class: 'sr-only' }, 'Keys: number keys pick an answer (letters a to e for the right-hand column in matching), Backspace takes back the last tile or step, Enter checks and continues, Escape leaves the lesson.'),
+    quitBtn, bar, comboEl);
   const tagRow = h('div', { class: 'ex-tags' });
   const stage = h('div', { class: 'ex-stage' });
   const inner = h('div', { class: 'lesson-inner' }, tagRow, stage);
@@ -64,13 +68,14 @@ export function playSession(root, { title, items, mode = 'lesson', onFinish, onQ
     if (!target) return;
     const room = window.innerHeight - foot.offsetHeight - 12; // not the rect: the sheet is still sliding up
     const r = target.getBoundingClientRect();
-    if (r.bottom > room) body.scrollTo({ top: body.scrollTop + Math.min(r.bottom - room, r.top - body.getBoundingClientRect().top), behavior: 'smooth' });
+    if (r.bottom > room) body.scrollTo({ top: body.scrollTop + Math.min(r.bottom - room, r.top - body.getBoundingClientRect().top), behavior: glide() });
   }
 
   function drawBar() {
     const pct = Math.round((solved / total) * 100);
     fill.style.width = Math.max(pct, 2) + '%';
     bar.setAttribute('aria-valuenow', String(solved));
+    bar.setAttribute('aria-valuetext', `${solved} of ${total} done`);
     bar.classList.toggle('hot', combo >= 5);          // the bar turns flame orange (--combo)
     comboEl.classList.toggle('hot', combo >= 5);
     comboEl.innerHTML = combo >= 2 ? `${ICON.flame(true)}<span class="mono">${combo}</span>` : '';
@@ -99,7 +104,12 @@ export function playSession(root, { title, items, mode = 'lesson', onFinish, onQ
     skipBtn.classList.toggle('hidden', !!cur.learn);
     footInner.replaceChildren(skipBtn, checkBtn);
     sync();
-    cur.focus?.();
+    // the focus starts on the new exercise: its own control (the type exercise's terminal), else its prompt, so a
+    // screen reader reads the question and Tab goes on to the answers
+    if (!cur.focus?.() && !stage.contains(document.activeElement)) {
+      const q = stage.querySelector('.ex-prompt, .learn-title');
+      if (q) { q.setAttribute('tabindex', '-1'); q.focus({ preventScroll: true }); }
+    }
   }
   function sync() { checkBtn.disabled = !cur || !cur.ready(); }
 
@@ -157,10 +167,11 @@ export function playSession(root, { title, items, mode = 'lesson', onFinish, onQ
     const ok = res.ok;
     const praise = ['Nice!', 'Correct!', 'Great job!', 'Spot on!', 'You got it!'];
     const head = ok ? (combo >= 5 ? `${combo} in a row!` : praise[(pos + combo) % praise.length]) : res.skipped ? 'No worries, here it is' : 'Not quite';
-    const cont = h('button', { class: 'btn big ' + (ok ? 'primary' : 'dark') + ' cont', type: 'button', onclick: () => next() }, 'Continue');
-    const content = h('div', { class: 'sheet' },
+    // the feedback is read with Continue, which takes the focus (its description is the whole sheet text)
+    const cont = h('button', { class: 'btn big ' + (ok ? 'primary' : 'dark') + ' cont', type: 'button', 'aria-describedby': 'sheet-text', onclick: () => next() }, 'Continue');
+    const content = h('div', { class: 'sheet', role: 'group', 'aria-label': ok ? 'Correct' : 'Feedback' },
       h('div', { class: 'sheet-twig', html: twigSVG(ok ? 'happy' : 'worried') }),
-      h('div', { class: 'sheet-text' },
+      h('div', { class: 'sheet-text', id: 'sheet-text' },
         h('h3', { class: 'sheet-head' }, head),
         !ok && res.answer ? h('p', { class: 'sheet-ans' }, h('span', { class: 'mono lab' }, 'CORRECT ANSWER'), h(res.mono ? 'code' : 'span', { class: 'ans' }, res.answer)) : null,
         res.note ? h('p', { class: 'sheet-note' }, res.note) : null,

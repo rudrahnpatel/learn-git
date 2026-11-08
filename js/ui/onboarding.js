@@ -14,18 +14,22 @@ export function renderOnboarding(root, { onDone }) {
   let step = 0, placement = null, goal = null;
   const t = twig({ mood: 'happy', size: 170, side: 'right', cls: 'onb-twig' });
   const stage = h('div', { class: 'onb-stage' });
-  const dots = h('div', { class: 'onb-dots' });
+  const dots = h('div', { class: 'onb-dots', role: 'img' });
   const next = h('button', { class: 'btn primary big', type: 'button', onclick: () => advance() });
   const back = h('button', { class: 'btn ghost onb-back', type: 'button', onclick: () => goBack() }, h('span', { class: 'arr', 'aria-hidden': 'true' }, '← '), 'Back');
-  const el = h('div', { class: 'onboard' }, h('div', { class: 'onb-inner' }, t.el, stage,
+  const el = h('main', { class: 'onboard' }, h('div', { class: 'onb-inner' }, t.el, stage,
     h('div', { class: 'onb-foot' }, h('div', { class: 'onb-nav' }, back, dots, h('span', { 'aria-hidden': 'true' })), next)));
   root.replaceChildren(el);
 
   const choiceList = (items, sel, onPick, fmt) => h('div', { class: 'onb-opts' }, items.map((it, i) =>
     h('button', { class: 'onb-opt', type: 'button', 'aria-pressed': String(sel === i), onclick: () => { sfx.tap(); onPick(i); draw(); } }, fmt(it, i))));
 
-  function draw() {
+  // moved: the step changed, so the focus goes to the new question (a screen reader reads it; Tab reaches the
+  // options next). A pick redraws in place and keeps the focus where it is.
+  function draw(moved = false) {
     dots.replaceChildren(...[0, 1, 2].map((i) => h('span', { class: 'dot' + (i === step ? ' on' : i < step ? ' past' : '') })));
+    dots.setAttribute('aria-label', `Step ${step + 1} of 3`);
+    const focusedOpt = [...stage.querySelectorAll('.onb-opt')].indexOf(document.activeElement);
     back.hidden = step === 0;
     if (step === 0) {
       t.say('Hi! I\'m <b>Twig</b>, a tiny branch with big plans.', 'happy');
@@ -48,15 +52,17 @@ export function renderOnboarding(root, { onDone }) {
       next.disabled = goal == null;
     }
     stage.classList.remove('enter'); void stage.offsetWidth; stage.classList.add('enter');
+    if (moved) { const t1 = stage.querySelector('h1'); t1.setAttribute('tabindex', '-1'); t1.focus({ preventScroll: true }); }
+    else if (focusedOpt >= 0) stage.querySelectorAll('.onb-opt')[focusedOpt]?.focus({ preventScroll: true }); // the redraw replaced it
   }
   // Back keeps the answers already picked, so going back and forth never loses a choice.
   function goBack() {
     if (step === 0) return;
-    sfx.tap(); step--; draw();
+    sfx.tap(); step--; draw(true);
   }
   function advance() {
     sfx.tap();
-    if (step < 2) { step++; draw(); return; }
+    if (step < 2) { step++; draw(true); return; }
     game.G.placement = placement;
     game.G.goal = game.GOALS[goal].xp;
     game.G.onboarded = true;

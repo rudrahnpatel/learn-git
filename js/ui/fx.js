@@ -1,7 +1,9 @@
 // Decoration and juice: the paper-cut shape layer, confetti bursts, XP fly-ups, toasts, count-ups.
-import { h } from '../dom.js';
+import { h, announce } from '../dom.js';
 
 export const reducedMotion = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+// scrollIntoView / scrollTo behaviour: smooth, except under reduced motion
+export const glide = () => (reducedMotion() ? 'auto' : 'smooth');
 // Accent fills as tokens, so the dark theme can calm them (css/style.css).
 const COLORS = { red: 'var(--red)', yellow: 'var(--yellow)', sky: 'var(--sky)', pink: 'var(--pink)', green: 'var(--green)', sunbeam: 'var(--sunbeam)' };
 export const accent = (name) => COLORS[name] || COLORS.yellow;
@@ -114,10 +116,12 @@ export function flyUp(fromEl, text, cls = '', { icon = '', down = false } = {}) 
   ], { duration: 1100, easing: 'cubic-bezier(.2,.8,.3,1)', fill: 'forwards' }).onfinish = () => el.remove();
 }
 
+// The toast is drawn in #fx (hidden from assistive tech, like the confetti) and spoken through the live region.
 export function toast(text, { icon = '', ms = 2200, cls = '' } = {}) {
   const fx = document.getElementById('fx');
   if (!fx) return;
-  const el = h('div', { class: 'toast' + (cls ? ' ' + cls : ''), role: 'status' }, icon ? h('span', { class: 'toast-ic', html: icon }) : null, h('span', {}, text));
+  announce(text);
+  const el = h('div', { class: 'toast' + (cls ? ' ' + cls : '') }, icon ? h('span', { class: 'toast-ic', html: icon }) : null, h('span', {}, text));
   fx.append(el);
   setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 300); }, ms);
 }

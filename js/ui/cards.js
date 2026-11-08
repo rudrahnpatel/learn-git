@@ -32,7 +32,7 @@ export function cardEl(card, { mode = 'collect', locked = false } = {}) {
     h('span', { class: 'ccard-title' }, card.title),
     h('span', { class: 'ccard-what' }, card.what));
   const back = mode === 'reveal'
-    ? h('span', { class: 'ccard-face back cover' }, h('span', { class: 'cover-twig', html: twigSVG('happy') }), h('span', { class: 'mono cover-t' }, APP.name))
+    ? h('span', { class: 'ccard-face back cover', 'aria-hidden': 'true' }, h('span', { class: 'cover-twig', html: twigSVG('happy') }), h('span', { class: 'mono cover-t' }, APP.name))
     : h('span', { class: 'ccard-face back' },
       h('span', { class: 'mono tiny' }, 'EXAMPLE'),
       h('pre', { class: 'ccard-ex' }, h('code', {}, card.example)),

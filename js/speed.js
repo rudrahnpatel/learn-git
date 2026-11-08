@@ -1,5 +1,5 @@
 // Speed round: "which command does this?" against the clock.
-import { h } from './dom.js';
+import { h, announce } from './dom.js';
 import * as game from './ui/game.js';
 import { sfx } from './sound.js';
 import { ICON } from './ui/fx.js';
@@ -62,8 +62,9 @@ const DURATION = 90;
 export function renderSpeed(root, opts = {}) {
   let qs = [], idx = 0, score = 0, wrong = 0, timer = 0, left = DURATION, running = false, misses = [];
   const best = () => game.G.stats.speedBest || 0;
-  const qEl = h('p', { class: 'speed-q' });
-  const input = h('input', { class: 'term-in speed-in', spellcheck: 'false', autocomplete: 'off', autocapitalize: 'off', 'aria-label': 'Your command', placeholder: 'git ...' });
+  // each new situation is read out as it appears (the focus stays in the input), and is the input's description
+  const qEl = h('p', { class: 'speed-q', id: 'speed-q', 'aria-live': 'polite' });
+  const input = h('input', { class: 'term-in speed-in', spellcheck: 'false', autocomplete: 'off', autocapitalize: 'off', 'aria-label': 'Your command', 'aria-describedby': 'speed-q', placeholder: 'git ...' });
   const fb = h('p', { class: 'speed-fb', 'aria-live': 'polite' });
   const scoreEl = h('span', { class: 'big' }, '0');
   const timeEl = h('span', { class: 'big' }, String(DURATION));
@@ -71,12 +72,12 @@ export function renderSpeed(root, opts = {}) {
   const bar = h('div', { class: 'timebar' }, h('div', { class: 'timefill' }));
   const startBtn = h('button', { class: 'btn primary big', onclick: () => start() }, 'Start', h('span', { class: 'arr' }, ' →'));
   const skipBtn = h('button', { class: 'btn', type: 'button', onclick: () => reveal() }, 'Skip');
-  const form = h('form', { class: 'speed-form', onsubmit: (e) => { e.preventDefault(); answer(); } }, h('span', { class: 'prompt' }, '$'), input, h('button', { class: 'btn small run', type: 'submit' }, '⏎'), skipBtn);
+  const form = h('form', { class: 'speed-form', onsubmit: (e) => { e.preventDefault(); answer(); } }, h('span', { class: 'prompt' }, '$'), input, h('button', { class: 'btn small run', type: 'submit', 'aria-label': 'Submit' }, h('span', { 'aria-hidden': 'true' }, '⏎')), skipBtn);
   const play = h('div', { class: 'speed-play hidden' }, bar, qEl, form, fb);
   const summary = h('div', { class: 'speed-summary' },
     h('p', {}, `You get ${DURATION} seconds. Each line describes a situation: type the git command that handles it. Equivalent forms count (switch -c or checkout -b, --staged or --cached...). Skipping shows the answer.`),
     startBtn);
-  root.replaceChildren(h('section', { class: 'speed card' },
+  root.replaceChildren(h('main', { class: 'speed card' },
     h('div', { class: 'speed-head' },
       h('button', { class: 'icon-btn round quit', 'aria-label': 'Back to practice', html: ICON.close(), onclick: () => { clearInterval(timer); opts.onBack?.(); } }),
       h('h1', {}, 'Speed round'),
@@ -94,6 +95,7 @@ export function renderSpeed(root, opts = {}) {
     timer = setInterval(() => {
       if (!document.body.contains(root)) { clearInterval(timer); return; }
       left--; timeEl.textContent = String(left);
+      if (left === 30 || left === 10) announce(`${left} seconds left.`);
       bar.firstChild.style.width = `${(left / DURATION) * 100}%`;
       if (left <= 0) finish();
     }, 1000);
@@ -139,6 +141,10 @@ export function renderSpeed(root, opts = {}) {
       misses.length ? h('div', {}, h('p', { class: 'muted' }, 'Worth another look:'),
         h('ul', { class: 'misses' }, [...new Set(misses)].map((m) => h('li', {}, m.q, ' → ', h('code', {}, m.show))))) : null,
       h('button', { class: 'btn primary big', onclick: () => start() }, 'Play again', h('span', { class: 'arr' }, ' →'))].filter(Boolean));
+    // the input that had the focus is hidden now: the result takes it, and is read out
+    const res = summary.querySelector('.speed-result');
+    res.setAttribute('tabindex', '-1'); res.classList.add('focus-quiet'); res.focus({ preventScroll: true });
+    announce(`Time! You scored ${score}.${isBest && score > 0 ? ' New best.' : ''}${xp ? ` Plus ${xp} XP.` : ''}`);
   }
   return () => clearInterval(timer);
 }

@@ -1,7 +1,7 @@
 // Celebration screens: lesson complete ("merged into main", stat cards counting up), streak
 // extended (a commit lands on your history line), quests and achievements, and the reward crate
 // (opened, then its release tag ships). Each step is one screen with one Continue button.
-import { h } from '../dom.js';
+import { h, announce, holdFocus, topLayer } from '../dom.js';
 import { REWARDS } from '../brand.js';
 import { sfx } from '../sound.js';
 import { twig } from './twig.js';
@@ -11,7 +11,7 @@ import * as game from './game.js';
 // steps: [() => { el, onShow? }]; calls onDone after the last one.
 export function runSequence(root, steps, onDone) {
   let i = 0;
-  const wrap = h('div', { class: 'celebrate' });
+  const wrap = h('main', { class: 'celebrate' });
   root.replaceChildren(wrap);
   let onKey;
   const go = () => {
@@ -21,7 +21,10 @@ export function runSequence(root, steps, onDone) {
     const screen = h('section', { class: 'cel-screen enter' }, step.el, h('div', { class: 'cel-foot' }, btn));
     wrap.replaceChildren(screen);
     step.onShow?.(screen);
-    setTimeout(() => btn.focus({ preventScroll: true }), 300);
+    // each step is a new screen: the focus goes to its heading, so a screen reader starts with "Merged into main!"
+    // and reads on through the stats; Enter (anywhere) or Tab then Continue moves on
+    const h1 = screen.querySelector('h1');
+    if (h1) { h1.setAttribute('tabindex', '-1'); h1.focus({ preventScroll: true }); } else btn.focus({ preventScroll: true });
   };
   onKey = (e) => { if (!wrap.isConnected) { document.removeEventListener('keydown', onKey); return; } if (e.key === 'Enter' && !document.querySelector('.modal-wrap')) { e.preventDefault(); go(); } };
   document.addEventListener('keydown', onKey);
@@ -32,8 +35,9 @@ export function runSequence(root, steps, onDone) {
 const fmtTime = (ms) => { const s = Math.round(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
 
 function statCard(label, color, value, fmt) {
-  const num = h('span', { class: 'stat-num' }, '0');
-  const card = h('div', { class: `stat-card c-${color}` }, h('span', { class: 'stat-label mono' }, label), h('div', { class: 'stat-val' }, num));
+  // the number counts up on screen; a screen reader gets the final value once (not every frame of the count)
+  const num = h('span', { class: 'stat-num', 'aria-hidden': 'true' }, '0');
+  const card = h('div', { class: `stat-card c-${color}` }, h('span', { class: 'stat-label mono' }, label), h('div', { class: 'stat-val' }, num, h('span', { class: 'sr-only' }, fmt(value))));
   return { card, run: (delay) => countUp(num, value, { fmt, delay, ms: 900 }) };
 }
 
@@ -133,7 +137,7 @@ export function commitLine({ land = false } = {}) {
 export function streakStep(ev) {
   return () => {
     setShapes('celebrate');
-    const count = h('span', { class: 'streak-big-n' }, String(Math.max(0, ev.count - 1)));
+    const count = h('span', { class: 'streak-big-n', 'aria-hidden': 'true' }, String(Math.max(0, ev.count - 1)));
     const line = commitLine({ land: true });
     const msg = ev.milestone ? `${ev.milestone}-day milestone! That's a real habit, tagged and everything.` : ev.count === 1 ? 'Your first commit. Come back tomorrow to grow the line.' : 'Another commit on your history. See you tomorrow.';
     const el = h('div', { class: 'cel-body' },
@@ -141,7 +145,7 @@ export function streakStep(ev) {
         h('span', { class: 'sh-ic', html: ICON.commit(true) }), count,
         h('span', { class: 'mono tiny sh-l' }, 'DAY STREAK')),
       ev.milestone ? h('span', { class: 'tag-pill mono milestone-tag' }, h('span', { class: 'inline-ic', html: ICON.tag(false) }), `streak-${ev.milestone}`) : null,
-      h('h1', { class: 'cel-title' }, 'Streak extended!'),
+      h('h1', { class: 'cel-title' }, 'Streak extended!', h('span', { class: 'sr-only' }, ` ${ev.count}-day streak.`)),
       h('p', { class: 'cel-sub' }, msg),
       h('div', { class: 'card week-card' }, line));
     return {
@@ -163,7 +167,7 @@ export function rewardsStep({ goalReached, questEvents = [], achievements = [] }
     const rows = [];
     if (goalReached) rows.push(h('div', { class: 'reward-row c-yellow' }, h('span', { class: 'rw-ic', html: ICON.bolt() }), h('div', {}, h('h3', {}, 'Daily goal reached'), h('p', {}, `${game.G.goal} XP today. Nice work.`))));
     for (const e of questEvents) {
-      if (e.type === 'quest') rows.push(h('div', { class: 'reward-row c-green' }, h('span', { class: 'rw-ic', html: ICON.check() }), h('div', {}, h('h3', {}, 'Quest complete'), h('p', {}, e.quest.text)), h('span', { class: 'rw-cherries', 'aria-label': `plus ${REWARDS.currency.count(e.quest.cherries)}` }, h('span', { html: REWARDS.currency.icon() }), `+${e.quest.cherries}`)));
+      if (e.type === 'quest') rows.push(h('div', { class: 'reward-row c-green' }, h('span', { class: 'rw-ic', html: ICON.check() }), h('div', {}, h('h3', {}, 'Quest complete'), h('p', {}, e.quest.text)), h('span', { class: 'rw-cherries' }, h('span', { html: REWARDS.currency.icon() }), `+${e.quest.cherries}`, h('span', { class: 'sr-only' }, ` ${REWARDS.currency.many}`))));
       if (e.type === 'daily-release') rows.push(h('div', { class: 'reward-row c-pink' }, h('span', { class: 'rw-ic', html: ICON.crate(false) }), h('div', {}, h('h3', {}, 'All quests done'), h('p', {}, 'Today\'s daily crate is ready to open.'))));
     }
     for (const a of achievements) rows.push(h('div', { class: `reward-row ach c-${a.color}` }, h('span', { class: 'rw-ic', html: ICON.trophy() }), h('div', {}, h('span', { class: 'mono tiny' }, 'ACHIEVEMENT UNLOCKED'), h('h3', {}, a.title), h('p', {}, a.text))));
@@ -204,10 +208,18 @@ export function releaseOverlay({ version = 'v0.1', title = 'Reward crate', seed 
     const msg = h('p', { class: 'cel-sub' }, 'Tap the crate to open it');
     const out = h('div', { class: 'release-reward' });
     const done = h('button', { class: 'btn primary big waiting', type: 'button', tabindex: '-1' }, 'Collect');
-    const panel = h('div', { class: 'release-panel', role: 'dialog', 'aria-label': `${title}, release ${version}` },
-      h('span', { class: 'mono tiny' }, label), h('h1', { class: 'cel-title' }, title), stage, msg, out, cmd, done);
+    const panel = h('div', { class: 'release-panel', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'release-h', 'aria-describedby': 'release-msg' },
+      h('span', { class: 'mono tiny' }, label), h('h1', { class: 'cel-title', id: 'release-h' }, title), stage, msg, out, cmd, done);
+    msg.id = 'release-msg';
     const wrap = h('div', { class: 'modal-wrap release-wrap' }, panel);
     root.append(wrap);
+    // a real modal: the page behind is inert, Tab stays inside, Escape closes it unopened (nothing is spent) or,
+    // once the tag has shipped, collects; the focus goes back where it was
+    const hold = holdFocus(wrap);
+    let shipped = false;
+    const finish = (r) => { if (!wrap.isConnected) return; document.removeEventListener('keydown', onEsc); wrap.remove(); hold.release(); resolve(r); };
+    const onEsc = (e) => { if (e.key !== 'Escape' || topLayer() !== hold) return; e.preventDefault(); if (!reward) finish(null); else if (shipped) finish(reward); };
+    document.addEventListener('keydown', onEsc);
     let reward = null;
     const open = () => {
       if (reward) return;
@@ -225,6 +237,7 @@ export function releaseOverlay({ version = 'v0.1', title = 'Reward crate', seed 
         cherryBurst(crate, { count: 10 });
         confetti(crate, { count: 26, spread: 0.7 });
         msg.textContent = 'Cherries inside!';
+        announce(`Cherries inside! You cherry-picked ${reward.cherries} cherries.${reward.boost ? ' Fast-forward: 2 times XP for 15 minutes.' : ''}`);
         const n = h('span', {}, '0');
         out.replaceChildren(...[
           h('div', { class: 'rw-cherries big' }, h('span', { html: ICON.cherry() }), '+', n),
@@ -238,13 +251,14 @@ export function releaseOverlay({ version = 'v0.1', title = 'Reward crate', seed 
         cmd.textContent = ` * [new tag]  ${version} -> ${version}`;
         cmd.classList.add('ok');
         msg.textContent = `Shipped ${version}!`;
+        shipped = true;
         done.classList.remove('waiting');
         done.removeAttribute('tabindex');
         done.focus();
       }, rm ? 0 : 1650);
     };
     stage.addEventListener('click', open);
-    done.addEventListener('click', () => { wrap.remove(); resolve(reward); });
+    done.addEventListener('click', () => finish(reward));
     setTimeout(() => stage.focus(), 50);
   });
 }
