@@ -213,13 +213,16 @@ function checkBash(ex, { puzzle = false } = {}) {
     }
   } else if (ex.type === 'type') {
     assert(typeof ex.setup === 'function' && typeof ex.check === 'function' && str(ex.solution), 'type needs setup, check, solution');
-    const cmds = splitCommands(ex.solution);
+    // run as typed, one terminal line at a time; the budget counts && and ; chains as separate commands, except
+    // inside one compound command (an if, a loop, a function definition), which counts as one
+    const lines = String(ex.solution).split('\n').map((x) => x.trim()).filter(Boolean);
+    const cmds = lines.flatMap((l) => (/^(if|for|while|until)\b|^\w+\(\)\s*\{/.test(l) ? [l] : splitCommands(l)));
     const max = puzzle ? ex.max || 6 : 3;
     assert(cmds.length >= 1 && cmds.length <= max, `solution has ${cmds.length} commands (max ${max})`);
     assert(!ex.check(freshShell(ex.setup)), 'check is already true right after setup');
     const runAll = (setup, what) => {
       const sh = freshShell(setup);
-      for (const c of cmds) { const r = sh.run(c); assert(r.ok, `${what}: "${c}" failed:\n${r.lines.map((l) => l.t).join('\n')}`); }
+      for (const c of lines) { const r = sh.run(c); assert(r.ok, `${what}: "${c}" failed:\n${r.lines.map((l) => l.t).join('\n')}`); }
       return sh;
     };
     const live = runAll(ex.setup, 'solution');
@@ -230,14 +233,14 @@ function checkBash(ex, { puzzle = false } = {}) {
       assert(!ex.check(freshShell(ex.variant)), 'check is already true right after the variant setup');
       const v = runAll(ex.variant, 'solution on the variant');
       assert(ex.check(v), 'check is false after running the solution on the variant');
-      assert(gradeShellType(ex, live, cmds).ok, 'gradeShellType rejects the solution');
+      assert(gradeShellType(ex, live, lines).ok, 'gradeShellType rejects the solution');
     }
-    if (readsOutput(ex, cmds)) {
+    if (readsOutput(ex, lines)) {
       bOutputChecks++;
       assert(ex.variant, 'the check reads the last output, so it needs a variant (a hard-coded answer would pass)');
       const cheat = cheatLine(live.lastOut);
       assert(!gradeShellType(ex, replay(ex.setup, [cheat]), [cheat]).ok, `a hard-coded answer passes: ${cheat}`);
-      assert(ex.variant && replay(ex.variant, cmds).lastOut !== live.lastOut, 'the variant prints the same output as the setup');
+      assert(ex.variant && replay(ex.variant, lines).lastOut !== live.lastOut, 'the variant prints the same output as the setup');
     }
   } else if (ex.type === 'script') {
     assert(typeof ex.setup === 'function' && typeof ex.check === 'function', 'script needs setup and check');
@@ -303,8 +306,10 @@ for (const u of BASH_UNITS) {
       bLessonIds.add(l.id);
       assert(str(l.title), 'lesson needs a title');
       assert(l.exercises.length >= 8 && l.exercises.length <= 12, `lesson has ${l.exercises.length} exercises (want 8-12)`);
+      // a lesson ends by doing: 1-3 typed commands, and from unit 9 on up to 2 scripts (which may replace them)
       const typeCount = l.exercises.filter((e) => e.type === 'type').length;
-      assert(typeCount >= 1 && typeCount <= 3, `lesson has ${typeCount} type exercises (want 1-3)`);
+      const scriptCount = l.exercises.filter((e) => e.type === 'script').length;
+      assert(typeCount <= 3 && scriptCount <= 2 && typeCount + scriptCount >= 1, `lesson has ${typeCount} type and ${scriptCount} script exercises (want 1-3 type, 0-2 script, at least one of either)`);
       assert(l.exercises[0].type === 'learn', 'a lesson opens with a learn card');
     } catch (e) { failed++; uFail++; console.log(`  FAIL lesson ${l.id}: ${e.message}`); }
     for (const ex of l.exercises) {
@@ -318,7 +323,7 @@ for (const u of BASH_UNITS) {
       assert(c && str(c.id) && str(c.title) && str(c.blurb), 'a bash challenge is { id, title, blurb, exercises }');
       assert(!bLessonIds.has(c.id), `challenge id ${c.id} clashes with a lesson id`);
       assert(Array.isArray(c.exercises) && c.exercises.length >= 1 && c.exercises.length <= 4, 'a challenge has 1-4 exercises');
-      assert(c.exercises.every((e) => e.type === 'type'), 'challenge exercises are type exercises');
+      assert(c.exercises.every((e) => e.type === 'type' || e.type === 'script'), 'challenge exercises are type or script exercises');
     } catch (e) { failed++; uFail++; console.log(`  FAIL challenge ${c?.id}: ${e.message}`); continue; }
     for (const ex of c.exercises) {
       n++;
@@ -329,7 +334,7 @@ for (const u of BASH_UNITS) {
   bTotal += n;
   console.log(`${uFail ? 'FAIL' : 'ok  '} ${u.id.padEnd(13)} ${u.lessons.length} lessons, ${n} exercises, challenges: ${u.challenges.map((c) => c.id).join(', ')}`);
 }
-// The `script` type has no lesson content yet (units 9+): its test-only fixtures go through the same rules.
+// The `script` type's test-only fixtures (tests/fixtures) go through the same rules as the lessons' scripts.
 for (const ex of SCRIPT_FIXTURES) {
   try { checkBash(ex); passed++; console.log(`ok   fixture ${ex.id}`); }
   catch (e) { failed++; console.log(`  FAIL fixture ${ex.id} [script]\n       ${e.message.split('\n').join('\n       ')}`); }

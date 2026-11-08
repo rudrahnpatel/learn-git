@@ -1,6 +1,6 @@
 // Test-only `script` exercises (not in any lesson): they exercise the script grader (js/shellex.js gradeScript),
 // the content rules for the type (tests/content.test.mjs), the teach-before-test parser for scripts
-// (tests/teach-order.test.mjs) and the renderer in the browser checks. Real script lessons arrive with units 9-10.
+// (tests/teach-order.test.mjs) and the renderer in the browser checks. The lessons' own scripts (units 9, 10, 12) go through the same rules.
 import { runOut, filesUnder, listOf } from '../../js/content/shell-helpers.js';
 
 const txtIn = (sh, dir) => listOf(sh, dir).filter((n) => n.endsWith('.txt'));

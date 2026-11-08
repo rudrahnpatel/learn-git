@@ -302,7 +302,7 @@ export class Shell {
 
   execSimple(node, io) {
     this.step();
-    this.curLine = node.line;
+    this.curLine = node.line + (this.lineBase || 0);   // inside $( ), lines count from the outer command's line
     this._errSink = io.err; // where $(…) inside this command sends its stderr
     let argv, assigns;
     try {
@@ -355,13 +355,16 @@ export class Shell {
     const saved = this.saveScope();
     let status = 0;
     this.substDepth = (this.substDepth || 0) + 1;
+    // an error inside $( ) is reported at the outer command's line (bash: "s.sh: line 6: nope: command not found")
+    const savedLine = this.curLine, savedBase = this.lineBase, savedErr = this._errSink;
+    this.lineBase = savedLine - 1;
     try {
       const ast = parse(src);
       status = this.execList(ast, { stdin: null, out: sink, err: this._errSink || new TermSink(this, 'err') });
     } catch (e) {
       if (e instanceof SyntaxErr) throw new ExpandError(e.message, 2);
       if (e instanceof ExitSignal) status = e.code; else throw e;
-    } finally { this.restoreScope(saved); this.substDepth--; }
+    } finally { this.restoreScope(saved); this.substDepth--; this.curLine = savedLine; this.lineBase = savedBase; this._errSink = savedErr; }
     this._subStatus = status;
     this.s.status = status;
     return sink.text.replace(/\n+$/, '');
@@ -474,13 +477,14 @@ export class Shell {
       if (/^syntax error near/.test(syn.message) && src !== undefined) io.err.write(`${shown}: line ${syn.line}: \`${src}'\n`);
       return 2;
     };
-    const savedFrame = this.frame, savedLine = this.curLine, savedLoop = this.loopDepth;
+    const savedFrame = this.frame, savedLine = this.curLine, savedLoop = this.loopDepth, savedBase = this.lineBase;
+    this.lineBase = 0;
     if (source) {
       this.frame = { ...savedFrame, args: args.length ? args : savedFrame.args, sourced: true };
       this.depth++;
       try { return finish(this.execList(ast, io)); }
       catch (e) { if (e instanceof ReturnSignal) return e.code; throw e; }
-      finally { this.depth--; this.frame = savedFrame; this.curLine = savedLine; }
+      finally { this.depth--; this.frame = savedFrame; this.curLine = savedLine; this.lineBase = savedBase; }
     }
     const saved = this.saveScope();
     env = env ? { ...env } : this.environ(assigns);
@@ -497,14 +501,15 @@ export class Shell {
       throw e;
     } finally {
       this.depth--; this.loopDepth = savedLoop;
-      this.frame = savedFrame; this.curLine = savedLine;
+      this.frame = savedFrame; this.curLine = savedLine; this.lineBase = savedBase;
       this.restoreScope(saved);
     }
   }
 
   callFunction(name, args, io) {
     if (this.depth >= LIMITS.depth) { this.shErr(io, `${name}: maximum function nesting level exceeded (sandbox limit)`); return 1; }
-    const savedFrame = this.frame, savedLoop = this.loopDepth;
+    const savedFrame = this.frame, savedLoop = this.loopDepth, savedBase = this.lineBase;
+    this.lineBase = 0;   // a body keeps the line numbers of where it was written
     this.frame = { ...savedFrame, args, locals: {}, func: name };
     this.depth++; this.loopDepth = 0;
     try { return this.execNode(this.s.funcs[name], io); }
@@ -512,7 +517,7 @@ export class Shell {
     finally {
       for (const [k, v] of Object.entries(this.frame.locals)) { if (v === null) delete this.s.vars[k]; else this.s.vars[k] = v; }
       this.depth--; this.loopDepth = savedLoop;
-      this.frame = savedFrame;
+      this.frame = savedFrame; this.lineBase = savedBase;
     }
   }
   // `local x`: remember the outer value so the function's return puts it back
@@ -579,7 +584,7 @@ export class Shell {
     this.s.lastBg = pid;
     if (node.type === 'simple' && node.words[0] && describe(node).split(' ')[0] === 'sleep') {
       this.s.jobs.push({ id, pid, cmd, state: 'Running' });
-      this.s.procs.push({ pid, cmd, user: this.s.user, cpu: 0, mem: 0.1, job: id });
+      this.s.procs.push({ pid, cmd, user: this.s.user, cpu: 0, mem: 0.1, job: id, tty: 'pts/0' });
       return 0;
     }
     const saved = this.saveScope();
@@ -629,9 +634,11 @@ export class Shell {
   setupCwd(p) { const abs = this.abs(p.startsWith('/') || p.startsWith('~') ? p : '~/' + p); this._mkdirs(abs); this.s.cwd = abs; this.s.vars.PWD = abs; return this; }
   setupEnv(vars, { exported = true } = {}) { for (const [k, v] of Object.entries(vars)) this.setVar(k, v, { exported }); return this; }
   // A process that is "already running" for ps/kill exercises. stubborn: ignores a plain kill (needs -9).
-  setupProcess(cmd, { cpu = 0.0, mem = 0.5, user = this.s.user, stubborn = false } = {}) {
+  // tty: the terminal it was started from; by default another one (pts/1), so a plain `ps` (this terminal only)
+  // does not list it and `ps aux` does, as on a real machine. '?' for a service with no terminal.
+  setupProcess(cmd, { cpu = 0.0, mem = 0.5, user = this.s.user, stubborn = false, tty = 'pts/1' } = {}) {
     const pid = this.s.nextPid++;
-    this.s.procs.push({ pid, cmd, user, cpu, mem, ...(stubborn ? { stubborn: true } : {}) });
+    this.s.procs.push({ pid, cmd, user, cpu, mem, tty, ...(stubborn ? { stubborn: true } : {}) });
     return pid;
   }
   // Run a command during setup; it must succeed.

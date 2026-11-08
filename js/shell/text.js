@@ -1,6 +1,6 @@
 // Text tools: grep, sort, uniq, cut, tr, sed, awk, tee, diff, rev. Each is (c: Ctx, args) -> exit status.
 import { cmp } from './fs.js';
-import { ShellError, getopt, linesOf, joinLines, printf } from './util.js';
+import { ShellError, getopt, linesOf, joinLines, printf, qname } from './util.js';
 import { diffOps } from '../git.js';
 
 /* ------------------------------------------------------------------ POSIX regex -> JS */
@@ -133,7 +133,7 @@ function fieldsOf(line, sep) {
 function sortCmd(c, args) {
   const { o, rest, last } = getopt('sort', args, { flags: 'rnufbhV', vals: 'ktoT', long: { reverse: 'r', 'numeric-sort': 'n', unique: 'u', 'ignore-case': 'f', key: 'k', 'field-separator': 't', output: 'o' } });
   const sep = o.t ? last('t') : undefined;
-  let lines = c.inputs(rest, { what: (f, e) => `cannot read: ${f}: ${e.message}` }).flatMap((x) => linesOf(x.text));
+  let lines = c.inputs(rest, { what: (f, e) => `cannot read: ${qname(f)}: ${e.message}` }).flatMap((x) => linesOf(x.text));
   if (c.status) return 2;
   const keys = (o.k || []).map((k) => {
     const m = k.match(/^(\d+)(?:\.\d+)?([a-zA-Z]*)(?:,(\d+)(?:\.\d+)?([a-zA-Z]*))?$/);

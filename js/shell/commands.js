@@ -2,7 +2,7 @@
 // UTILS are "programs" in /usr/bin, found through $PATH. Each is (c: Ctx, args) -> exit status
 // (or undefined: c.status, which c.err() sets). Text tools live in text.js.
 import { joinPath, dirname, basename, isUnder, modeString, cmp, FsError } from './fs.js';
-import { ShellError, getopt, linesOf, escapes, printf, shQuote, strftime } from './util.js';
+import { ShellError, getopt, linesOf, escapes, printf, shQuote, strftime, qname } from './util.js';
 import { TEXT_UTILS } from './text.js';
 import { MAN } from './man.js';
 
@@ -157,8 +157,28 @@ function testCmd(c, args, bracket) {
     if (t[i].startsWith('-') && t[i].length === 2 && i + 1 < t.length && !BINARY[t[i + 1]] && !['-a', '-o'].includes(t[i + 1])) throw new ShellError(`${t[i]}: unary operator expected`, 2);
     return t[i++].length > 0;
   }
+  // POSIX decides by the number of arguments first (bash does too), so `[ -gt 5 ]` (an empty unquoted $n) is
+  // "-gt: unary operator expected" and `[ a b c ]` is "b: binary operator expected"
+  const one = (k) => t[k].length > 0;
+  const two = (k) => {
+    if (t[k] === '!') return !one(k + 1);
+    if (UNARY[t[k]]) return UNARY[t[k]](t[k + 1]);
+    throw new ShellError(`${t[k]}: unary operator expected`, 2);
+  };
+  const three = (k) => {
+    if (BINARY[t[k + 1]]) return BINARY[t[k + 1]](t[k], t[k + 2]);
+    if (t[k + 1] === '-a') return one(k) && one(k + 2);
+    if (t[k + 1] === '-o') return one(k) || one(k + 2);
+    if (t[k] === '!') return !two(k + 1);
+    if (t[k] === '(' && t[k + 2] === ')') return one(k + 1);
+    throw new ShellError(`${t[k + 1]}: binary operator expected`, 2);
+  };
   try {
     if (!t.length) return 1;
+    if (t.length <= 3 || (t.length === 4 && t[0] === '!')) {
+      const v = t.length === 1 ? one(0) : t.length === 2 ? two(0) : t.length === 3 ? three(0) : !three(1);
+      return v ? 0 : 1;
+    }
     const v = or();
     if (i < t.length) throw new ShellError('too many arguments', 2);
     return v ? 0 : 1;
@@ -385,7 +405,7 @@ function kill(c, args) {
     if (/^-[A-Z]+$/i.test(a)) { const s = SIGNALS[a.slice(1).replace(/^SIG/i, '').toUpperCase()]; if (!s) return c.err(`${a.slice(1)}: invalid signal specification`); sig = s; continue; }
     targets.push(a);
   }
-  if (!targets.length) return c.err('usage: kill [-s sigspec | -n signum | -sigspec] pid | jobspec ...', 2);
+  if (!targets.length) return c.err('usage: kill [-s sigspec | -n signum | -sigspec] pid | jobspec ... or kill -l [sigspec]', 2);
   for (const t of targets) {
     if (t.startsWith('%')) {
       const j = findJob(c, t);
@@ -396,6 +416,7 @@ function kill(c, args) {
     if (!/^\d+$/.test(t)) { c.err(`${t}: arguments must be process or job IDs`); continue; }
     const pid = +t;
     if (pid === 1000) { c.hint('That is this shell itself; the sandbox keeps it alive.'); continue; }
+    if (pid === 1) { c.err('(1) - Operation not permitted'); continue; }   // init belongs to root
     const p = sh.s.procs.find((x) => x.pid === pid);
     if (!p) { c.err(`(${pid}) - No such process`); continue; }
     if (p.user !== sh.s.user && sh.s.user !== 'root') { c.err(`(${pid}) - Operation not permitted`); continue; }
@@ -540,10 +561,10 @@ function headTail(name) {
 function wc(c, args) {
   const { o, rest } = getopt('wc', args, { flags: 'lwcm', long: { lines: 'l', words: 'w', bytes: 'c', chars: 'm' } });
   const which = o.l || o.w || o.c || o.m ? ['l', 'w', 'c', 'm'].filter((k) => o[k]) : ['l', 'w', 'c'];
-  const chunks = c.inputs(rest);
+  const chunks = c.inputs(rest, { what: (f, e) => (f === '' ? 'invalid zero-length file name' : `${qname(f)}: ${e.message}`) });
   const count = (t) => ({ l: (t.match(/\n/g) || []).length, w: (t.match(/\S+/g) || []).length, c: new TextEncoder().encode(t).length, m: [...t].length });
   const rows = chunks.map((ch) => ({ name: rest.length ? ch.name : '', n: count(ch.text) }));
-  if (rows.length > 1) rows.push({ name: 'total', n: ['l', 'w', 'c', 'm'].reduce((acc, k) => ({ ...acc, [k]: rows.reduce((s, r) => s + r.n[k], 0) }), {}) });
+  if (rest.length > 1) rows.push({ name: 'total', n: ['l', 'w', 'c', 'm'].reduce((acc, k) => ({ ...acc, [k]: rows.reduce((s, r) => s + r.n[k], 0) }), {}) });
   // GNU's column width: one count of one input is not padded; otherwise the digits of the inputs' total size in
   // bytes, at least 7 when an input is a pipe (`ls | wc`), so `wc -l a b` lines up as " 2 a", " 1 b", " 3 total".
   let width = 1;
@@ -568,6 +589,7 @@ function mkdir(c, args) {
   const { o, rest } = getopt('mkdir', args, { flags: 'pv', vals: 'm', long: { parents: 'p', verbose: 'v' } });
   if (!rest.length) throw new ShellError('missing operand\nTry \'mkdir --help\' for more information.');
   for (const d of rest) {
+    if (d === '') { c.err('cannot create directory ‘’: No such file or directory'); continue; }
     const abs = c.abs(d);
     if (o.p) {
       const segs = abs.split('/').filter(Boolean);
@@ -620,7 +642,8 @@ function cpMv(name) {
     const dAbs = c.abs(dest);
     const dNode = fs.tryStat(dAbs);
     const dIsDir = dNode?.type === 'dir';
-    if (srcs.length > 1 && !dIsDir) throw new ShellError(`target '${dest}' is not a directory`);
+    // coreutils 9: "target 'x': No such file or directory" (or "Not a directory" when x is a file)
+    if (srcs.length > 1 && !dIsDir) throw new ShellError(`target '${dest}': ${dNode ? 'Not a directory' : 'No such file or directory'}`);
     const recursive = o.r || o.R || o.a;
     for (const s of srcs) {
       const sAbs = c.abs(s);
@@ -631,6 +654,8 @@ function cpMv(name) {
       const tn = fs.tryStat(tAbs);
       if (tAbs === sAbs) { c.err(`'${s}' and '${tShown}' are the same file`); continue; }
       if (sn.type === 'dir' && !mv && !recursive) { c.err(`-r not specified; omitting directory '${s}'`); continue; }
+      // a file onto "missing/": the slash promises a folder that isn't there
+      if (!dNode && dest.endsWith('/') && sn.type !== 'dir') { c.err(mv ? `cannot move '${s}' to '${dest}': Not a directory` : `cannot create regular file '${dest}': Not a directory`); continue; }
       if (sn.type === 'dir' && isUnder(tAbs, sAbs)) {
         c.err(mv ? `cannot move '${s}' to a subdirectory of itself, '${tShown}'` : `cannot copy a directory, '${s}', into itself, '${tShown}'`);
         continue;
@@ -651,7 +676,7 @@ function cpMv(name) {
           if (o.v) c.line(`'${s}' -> '${tShown}'`);
         }
       } catch (e) {
-        if (e instanceof FsError) c.err(e.code === 'EACCES' ? `cannot ${mv ? 'move' : 'create regular file'} '${mv ? s : tShown}'${mv ? ` to '${tShown}'` : ''}: Permission denied` : `cannot ${mv ? 'move' : 'copy'} '${s}': ${e.message}`);
+        if (e instanceof FsError) c.err(mv ? `cannot move '${s}' to '${tShown}': ${fmsg(e)}` : `cannot create ${sn.type === 'dir' ? 'directory' : 'regular file'} '${tShown}': ${fmsg(e)}`);
         else throw e;
       }
     }
@@ -933,28 +958,31 @@ function seq(c, args) {
   const sep = o.s ? last('s') : '\n';
   if (out.length) c.out(out.join(sep) + '\n');
 }
+// `ps` lists this terminal's processes (pts/0: the shell, its jobs, ps itself); `ps aux`, `ps -ef` and `ps -e` list
+// every process on the machine: init (pid 1, root) and whatever was started from other terminals too.
 function ps(c, args) {
   const sh = c.sh;
   const full = args.some((a) => /^-?(aux|ef|e|A|ax)$/.test(a));
   const me = sh.s.nextPid++;
-  const procs = [{ pid: 1000, cmd: '-bash', user: sh.s.user, cpu: 0, mem: 0.2 }, ...sh.s.procs, { pid: me, cmd: 'ps ' + args.join(' '), user: sh.s.user, cpu: 0, mem: 0.1 }]
-    .map((p) => ({ ...p, cmd: p.cmd.trim() }))
+  const procs = [
+    ...(full ? [{ pid: 1, cmd: '/sbin/init', user: 'root', cpu: 0, mem: 0.1, tty: '?' }] : []),
+    { pid: 1000, cmd: '-bash', user: sh.s.user, cpu: 0, mem: 0.2, tty: 'pts/0' }, ...sh.s.procs,
+    { pid: me, cmd: 'ps ' + args.join(' '), user: sh.s.user, cpu: 0, mem: 0.1, tty: 'pts/0' }]
+    .map((p) => ({ ...p, cmd: p.cmd.trim(), tty: p.tty || 'pts/1' }))
+    .filter((p) => full || (p.tty === 'pts/0' && p.user === sh.s.user))
     .sort((a, b) => a.pid - b.pid);
   if (args.some((a) => /aux/.test(a))) {
     c.line('USER         PID %CPU %MEM    VSZ   RSS TTY      STAT START   TIME COMMAND');
-    for (const p of procs) c.line(`${p.user.padEnd(8)} ${String(p.pid).padStart(7)} ${p.cpu.toFixed(1).padStart(4)} ${p.mem.toFixed(1).padStart(4)} ${String(Math.round(8000 + p.mem * 9000)).padStart(6)} ${String(Math.round(1000 + p.mem * 4000)).padStart(5)} pts/0    ${p.cpu > 50 ? 'R' : 'S'}    09:00   ${p.cpu > 50 ? '12:34' : '0:00'} ${p.cmd}`);
+    for (const p of procs) c.line(`${p.user.padEnd(8)} ${String(p.pid).padStart(7)} ${p.cpu.toFixed(1).padStart(4)} ${p.mem.toFixed(1).padStart(4)} ${String(Math.round(8000 + p.mem * 9000)).padStart(6)} ${String(Math.round(1000 + p.mem * 4000)).padStart(5)} ${p.tty.padEnd(8)} ${p.cpu > 50 ? 'R' : 'S'}    09:00   ${p.cpu > 50 ? '12:34' : '0:00'} ${p.cmd}`);
     return 0;
   }
   if (full && args.some((a) => /ef/.test(a))) {
     c.line('UID          PID    PPID  C STIME TTY          TIME CMD');
-    for (const p of procs) c.line(`${p.user.padEnd(8)} ${String(p.pid).padStart(7)} ${String(p.pid === 1000 ? 1 : 1000).padStart(7)}  0 09:00 pts/0    00:00:00 ${p.cmd}`);
+    for (const p of procs) c.line(`${p.user.padEnd(8)} ${String(p.pid).padStart(7)} ${String(p.pid === 1 ? 0 : p.pid === 1000 ? 1 : 1000).padStart(7)}  0 09:00 ${p.tty.padEnd(8)} 00:00:00 ${p.cmd}`);
     return 0;
   }
   c.line('    PID TTY          TIME CMD');
-  for (const p of procs) {
-    if (!full && p.user !== sh.s.user) continue;
-    c.line(`${String(p.pid).padStart(7)} pts/0    00:00:00 ${p.pid === 1000 ? 'bash' : basename(p.cmd.split(' ')[0])}`);
-  }
+  for (const p of procs) c.line(`${String(p.pid).padStart(7)} ${p.tty.padEnd(8)} 00:00:00 ${p.pid === 1000 ? 'bash' : p.pid === 1 ? 'init' : basename(p.cmd.split(' ')[0])}`);
   return 0;
 }
 function pgrep(c, args) {

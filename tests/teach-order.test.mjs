@@ -242,9 +242,12 @@ test('the parser reads commands, flags and revision syntax', () => {
 // `name() {` and `function name`), `op <<` (a here-doc; its body is data, not commands), the commands inside `$( )`,
 // a `#` comment ends the line, and a command after a keyword (`then ls`, `do cp …`) or an assignment
 // (`n=$(wc -l < f)`) is a command too. Words after `for x in` are a list, not commands.
+// Units 9-12 add: a script's arguments `var $1` ($1-$9), `var $0`, `var $#`, `var $@` ("$@", $*), trimming
+// `var ${%}` (${f%.txt}, ${p#*/}), `op &` (a background job; not `&&`, `2>&1`, `&>`), `op >&` (`>&2`), and the word
+// operators of `[ ]` / `test` kept whole (`[ -eq`, `[ -gt`), as find's are.
 const BASH_CMDS = new Set(new Shell().completions().shell);
-const OPS = ['2>&1', '<<<', '&>>', '2>>', '&>', '2>', '>>', '<<-', '<<', '&&', '||', '>', '<', '|', ';'];
-const REDIRS = new Set(['>', '>>', '<', '<<<', '<<', '<<-', '2>', '2>>', '&>', '&>>', '2>&1']);
+const OPS = ['2>&1', '<<<', '&>>', '2>>', '&>', '2>', '>>', '>&', '<<-', '<<', '&&', '||', '>', '<', '|', ';', '&'];
+const REDIRS = new Set(['>', '>>', '>&', '<', '<<<', '<<', '<<-', '2>', '2>>', '&>', '&>>', '2>&1']);
 // reserved words: the ones that open a construct become items; after any of them a command follows
 const KW_ITEM = { if: 'kw if', elif: 'kw if', for: 'kw for', while: 'kw while', until: 'kw until', function: 'kw function' };
 const KW_THEN_CMD = new Set(['if', 'then', 'elif', 'else', 'fi', 'do', 'done', 'while', 'until', '!', '{', '}']);
@@ -310,6 +313,12 @@ function wordItems(w, out) {
   if (/\$[A-Za-z_0-9@#*]|\$\{[\w#%/:-]+\}/.test(vars)) out.add('var $');
   if (/\$\{\w+\}/.test(vars)) out.add('var ${ }');
   if (/\$\?/.test(vars)) out.add('var $?');
+  // a script's arguments (units 9+): $1…$9, $0, $#, "$@" / $*, and trimming a value: ${f%.txt}, ${p#*/}
+  if (/\$[1-9]|\$\{[1-9]\}/.test(vars)) out.add('var $1');
+  if (/\$0/.test(vars)) out.add('var $0');
+  if (/\$#/.test(vars)) out.add('var $#');
+  if (/\$[@*]/.test(vars)) out.add('var $@');
+  if (/\$\{\w+(%|#)/.test(vars)) out.add('var ${%}');
   const unq = w.replace(/"[^"]*"|'[^']*'/g, (m) => { out.add(m[0] === '"' ? 'quote "' : "quote '"); return 'Q'; });
   if (/\\ /.test(unq)) out.add('escape \\');
   const bare = unq.replace(/\\./g, 'E').replace(/\$[?#@*$!0-9]/g, 'V');   // $? is not a glob
@@ -328,7 +337,7 @@ function bashFlagItems(cmd, t) {
   if (t === '-' || t === '--') return [`${cmd} ${t}`];
   if (t.startsWith('--')) return [`${cmd} ${t.split('=')[0]}`];
   if (/^-\d+$/.test(t)) return [`${cmd} -<n>`];
-  if (cmd === 'find' && /^-[a-z]{2,}$/.test(t)) return [`${cmd} ${t}`];   // find's options are words: -name, -type
+  if (['find', '[', 'test'].includes(cmd) && /^-[a-z]{2,}$/.test(t)) return [`${cmd} ${t}`];   // words: -name, -eq, -lt
   const m = /^-([a-zA-Z]+)\d*$/.exec(t);
   if (m) return [...m[1]].map((c) => `${cmd} -${c}`);
   if (/^-[a-zA-Z]/.test(t)) return [`${cmd} -${t[1]}`];                   // a value stuck to it: -d: -F, -t,
@@ -550,13 +559,19 @@ test('bash: the parser reads commands, flags, operators, globs and paths', () =>
 test('bash: the parser reads scripts: keywords, commands after them, $( ), here-docs, comments', () => {
   const s = (t, o) => [...bashItems(t, o)].sort();
   assert.deepEqual(s('if [ -f "$1" ]; then\n  wc -l < "$1"\nelif [ -d "$1" ]; then ls "$1"\nelse echo no; fi'),
-    ['[ -d', '[ -f', 'cmd [', 'cmd echo', 'cmd ls', 'cmd wc', 'kw if', 'op ;', 'op <', 'quote "', 'var $', 'wc -l']);
-  assert.deepEqual(s('for f in *.txt; do mv "$f" "${f%.txt}.md"; done', { splitOps: false }), ['cmd mv', 'glob *', 'kw for', 'quote "', 'var $']);
+    ['[ -d', '[ -f', 'cmd [', 'cmd echo', 'cmd ls', 'cmd wc', 'kw if', 'op ;', 'op <', 'quote "', 'var $', 'var $1', 'wc -l']);
+  assert.deepEqual(s('for f in *.txt; do mv "$f" "${f%.txt}.md"; done', { splitOps: false }), ['cmd mv', 'glob *', 'kw for', 'quote "', 'var $', 'var ${%}']);
   assert.deepEqual(s('while read -r line; do echo "$line"; done < list.txt', { splitOps: false }), ['cmd echo', 'cmd read', 'kw while', 'op <', 'quote "', 'read -r', 'var $']);
   assert.deepEqual(s('n=$(grep -c ERROR log.txt) # count them\necho $n'), ['assign =', 'cmd echo', 'cmd grep', 'grep -c', 'subst $( )', 'var $']);
-  assert.deepEqual(s('greet() {\n  local who=$1\n  return 0\n}\nfunction bye { echo bye; }'), ['cmd echo', 'cmd local', 'cmd return', 'kw function', 'op ;', 'var $']);
+  assert.deepEqual(s('greet() {\n  local who=$1\n  return 0\n}\nfunction bye { echo bye; }'), ['cmd echo', 'cmd local', 'cmd return', 'kw function', 'op ;', 'var $', 'var $1']);
   assert.deepEqual(s('cat > notes.txt <<EOF\nrm -rf everything | here\nEOF\nls'), ['cmd cat', 'cmd ls', 'op <<', 'op >']);
   assert.deepEqual(s('#!/bin/bash\n# a comment with ls in it\nset -e'), ['cmd set', 'set -e']);
+  // units 9-12
+  assert.deepEqual(s('echo "$0 got $# arguments: $@"'), ['cmd echo', 'quote "', 'var $', 'var $#', 'var $0', 'var $@']);
+  assert.deepEqual(s('if [ "$n" -gt 10 ] && [ ! -d "$1" ]; then echo "no" >&2; fi'), ['[ -d', '[ -gt', 'cmd [', 'cmd echo', 'kw if', 'op &&', 'op ;', 'op >&', 'quote "', 'var $', 'var $1']);
+  assert.deepEqual(s('sleep 100 & jobs'), ['cmd jobs', 'cmd sleep', 'op &']);
+  assert.deepEqual(s('ls nope > f 2>&1 && cat f &> g'), ['cmd cat', 'cmd ls', 'op &&', 'op &>', 'op 2>&1', 'op >']);
+  assert.deepEqual(s('mv "$f" "${f%.txt}.md"'), ['cmd mv', 'quote "', 'var $', 'var ${%}']);
 });
 
 test('bash: a script exercise needs what its starter and solution use', () => {

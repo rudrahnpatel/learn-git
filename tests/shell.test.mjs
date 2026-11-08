@@ -178,7 +178,7 @@ test('cp: files, into folders, -r, errors', () => {
   assert.ok(sh.fs.isDir('/home/you/backup/notes'), 'copying into an existing folder nests it');
   assert.match(err(sh, 'cp missing x', 1), /cp: cannot stat 'missing': No such file or directory/);
   assert.match(err(sh, 'cp a.txt a.txt', 1), /'a.txt' and 'a.txt' are the same file/);
-  assert.match(err(sh, 'cp a.txt b.log nofolder', 1), /target 'nofolder' is not a directory/);
+  assert.match(err(sh, 'cp a.txt b.log nofolder', 1), /target 'nofolder': No such file or directory/);
   assert.match(err(sh, 'cp a.txt', 1), /missing destination file operand after 'a.txt'/);
   assert.match(err(sh, 'cp -r notes notes/inner', 1), /cannot copy a directory, 'notes', into itself/);
   out(sh, 'echo old > keep.txt; cp -n a.txt keep.txt');
@@ -1049,4 +1049,54 @@ test('the step cap stops runaway work', () => {
   const r = sh.run('for i in $(seq 1 30000); do :; done');
   assert.equal(r.code, 1);
   assert.match(sh.lastErr, /sandbox limit/);
+});
+
+/* ================================================================== units 9-12: fixes checked against bash 5.3 / coreutils 9 */
+test('[ ] decides by the number of arguments, as POSIX and bash do', () => {
+  const sh = fresh();
+  assert.equal(err(sh, 'n=; [ $n -gt 5 ]', 2), 'bash: [: -gt: unary operator expected\n');
+  assert.equal(err(sh, '[ a b c ]', 2), 'bash: [: b: binary operator expected\n');
+  assert.equal(err(sh, 'x="a b"; [ $x = "a b" ]', 2), 'bash: [: too many arguments\n');
+  assert.equal(sh.run('[ -n ]').code, 0, 'one argument: true when not empty');
+  assert.equal(sh.run('[ ! -f a.txt ]').code, 1);
+  assert.equal(sh.run('[ ! -d nope ]').code, 0);
+  assert.equal(sh.run('[ -f a.txt -a -d notes ]').code, 0);
+});
+test('ps shows this terminal, ps aux everything; init is root\'s', () => {
+  const sh = fresh();
+  const other = sh.setupProcess('python3 render.py', { cpu: 97 });
+  sh.setupDone();
+  assert.doesNotMatch(out(sh, 'ps'), /python3/);
+  assert.match(out(sh, 'ps aux'), new RegExp(`^root +1 .*/sbin/init$[\\s\\S]*^you +${other} +97\\.0 .* pts/1 +R .*python3 render\\.py$`, 'm'));
+  assert.match(out(sh, 'ps -e'), /^\s+1 \?\s+00:00:00 init$/m);
+  out(sh, 'sleep 100 &');
+  assert.match(out(sh, 'ps'), /pts\/0 +00:00:00 sleep/);
+  assert.equal(err(sh, 'kill 1', 1), 'bash: kill: (1) - Operation not permitted\n');
+  assert.match(err(sh, 'kill', 2), /or kill -l \[sigspec\]$/m);
+});
+test('an empty name is no file at all ("$1" with no argument)', () => {
+  const sh = fresh();
+  assert.equal(err(sh, "cp '' backup/", 1), "cp: cannot stat '': No such file or directory\n");
+  assert.equal(err(sh, "cat ''", 1), "cat: '': No such file or directory\n");
+  assert.equal(err(sh, "wc -l ''", 1), 'wc: invalid zero-length file name\n');
+  assert.equal(err(sh, "ls ''", 2), "ls: cannot access '': No such file or directory\n");
+  assert.equal(err(sh, "touch ''", 1), "touch: cannot touch '': No such file or directory\n");
+  assert.equal(err(sh, "mkdir -p ''", 1), 'mkdir: cannot create directory ‘’: No such file or directory\n');
+  assert.equal(err(sh, "cat 'my file'", 1), "cat: 'my file': No such file or directory\n");
+});
+test('cp and mv into folders that are not there (coreutils 9 wording)', () => {
+  const sh = fresh({ 'site/a': '1', 'site/b': '2' });
+  assert.equal(err(sh, 'cp site/* public/', 1), "cp: target 'public/': No such file or directory\n");
+  assert.equal(err(sh, 'cp site/* a.txt', 1), "cp: target 'a.txt': Not a directory\n");
+  assert.equal(err(sh, 'cp a.txt nodir/', 1), "cp: cannot create regular file 'nodir/': Not a directory\n");
+  assert.equal(err(sh, 'cp a.txt nodir/x', 1), "cp: cannot create regular file 'nodir/x': No such file or directory\n");
+  assert.equal(err(sh, 'mv a.txt nodir/x', 1), "mv: cannot move 'a.txt' to 'nodir/x': No such file or directory\n");
+  assert.ok(!sh.readFile('nodir'), 'no file called nodir appears');
+  assert.equal(out(sh, 'wc -l a.txt nope', 1), '1 a.txt\n1 total\n', 'the total is printed even when a file is missing');
+});
+test('errors inside $( ) name the line of the command around it', () => {
+  const sh = fresh();
+  sh.writeFile('s.sh', '#!/bin/bash\n# c\nx=$(nope1)\n[$(echo 2) -gt 1]\nf() {\n  nope2\n}\ny=$(f)\nnope3\n');
+  sh.run('bash s.sh');
+  assert.equal(sh.lastErr, 's.sh: line 3: nope1: command not found\ns.sh: line 4: [2: command not found\ns.sh: line 6: nope2: command not found\ns.sh: line 9: nope3: command not found\n');
 });

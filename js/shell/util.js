@@ -29,6 +29,11 @@ export class BufSink {
 }
 export class NullSink { write() {} }
 
+export const NO_PATH = '/\u0000/\u0000';
+// A file name the way coreutils' messages show it: as is when plain, in single quotes when empty or when it has
+// spaces or shell characters (cat: 'my notes.txt': No such file or directory).
+export const qname = (f) => (f === '' || /[^\w./+,:@%^=-]/.test(f) ? `'${String(f).replace(/'/g, "'\\''")}'` : f);
+
 // What a command implementation gets: the shell, its streams, its name (for messages) and its environment.
 export class Ctx {
   constructor(sh, name, io, env = null) { this.sh = sh; this.name = name; this.io = io; this.env = env; this.status = 0; }
@@ -40,11 +45,13 @@ export class Ctx {
   // "name: msg" on stderr; marks the command as failed with `code` (unless 0)
   err(msg, code = 1) { this.io.err.write(`${this.name}: ${msg}\n`); if (code) this.status = code; }
   hint(msg) { this.sh.hint(msg); }
-  abs(p) { return this.sh.abs(p); }
+  // An empty name ("$1" when no argument was given) is no file at all, not the current folder: it resolves to a
+  // path that cannot exist, so commands fail with "No such file or directory" as on a real system.
+  abs(p) { return p === '' ? NO_PATH : this.sh.abs(p); }
   stdin() { return this.io.stdin ? this.io.stdin.readAll() : ''; }
   // The text of each input: named files, or stdin when there are none ('-' also means stdin).
-  // Errors are reported ("name: f: No such file or directory") and the file is skipped.
-  inputs(files, { what = (f, e) => `${f}: ${e.message}` } = {}) {
+  // Errors are reported ("name: f: No such file or directory", the name quoted when it needs it) and the file skipped.
+  inputs(files, { what = (f, e) => `${qname(f)}: ${e.message}` } = {}) {
     if (!files.length) return [{ name: '-', text: this.stdin(), stdin: true }];
     const out = [];
     for (const f of files) {

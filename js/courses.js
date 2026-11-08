@@ -36,12 +36,13 @@ export const COURSES = [
     id: 'bash', title: 'Linux CLI & bash', short: 'bash', blurb: 'Files, pipes, permissions and scripts in a real shell.',
     icon: BASH_ICON, accent: 'green', available: true, engine: 'shell',
     load: () => import('./content/bash/index.js').then((m) => m.UNITS),
-    // units 1-8 exist; "I write scripts" (skip to unit 9) returns with the scripting units
+    // all 12 units exist; each answer skips that many units (marked as skipped, still playable)
     placements: [
       { label: 'I\'ve never used a terminal', note: 'Start at the very first prompt.', skip: 0 },
       { label: 'I can move around', note: 'Skip first steps: start with files and folders.', skip: 1 },
       { label: 'I copy, move and read files', note: 'Start at pipes and redirection.', skip: 3 },
       { label: 'I pipe and grep', note: 'Skip the basics: start with searching, text and permissions.', skip: 4 },
+      { label: 'I write scripts', note: 'Skip to scripts: arguments, conditions, loops, processes and the story.', skip: 8 },
     ],
   },
 ];

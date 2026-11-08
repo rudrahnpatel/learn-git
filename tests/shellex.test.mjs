@@ -60,7 +60,7 @@ test('every output-reading bash exercise rejects its own hard-coded answer', () 
   let n = 0;
   for (const u of UNITS) for (const l of [...u.lessons, ...u.challenges]) for (const ex of l.exercises) {
     if (ex.type !== 'type') continue;
-    const lines = ex.solution.split(/\n|&&|;/).map((s) => s.trim()).filter(Boolean);
+    const lines = ex.solution.split('\n').map((s) => s.trim()).filter(Boolean);
     if (!readsOutput(ex, lines)) continue;
     n++;
     const cheat = cheatLine(replay(ex.setup, lines).lastOut);
