@@ -14,6 +14,8 @@ import { resetProgress, privacyLine } from './account.js';
 
 const KIND_ICON = { lesson: ICON.star, release: () => ICON.crate(false), challenge: ICON.terminal, review: ICON.trophy };
 const WAVE = [0, 0.55, 0.9, 0.55, 0, -0.55, -0.9, -0.55];
+// The daily crate's tag is the date as a short version, 2026-11-08 -> v26.11.08 (short enough for a phone's crate tag).
+const dailyTag = (day) => 'v' + day.slice(2).replace(/-/g, '.');
 
 function twigLine(msg) {
   if (msg) return msg;
@@ -109,7 +111,7 @@ export function renderHome(root, { message = null, popNode = null, refresh } = {
   async function start(n) {
     closePop();
     if (n.kind === 'release') {
-      const reward = await releaseOverlay({ version: n.version, seed: n.id });
+      const reward = await releaseOverlay({ version: n.version, from: n.prevVersion, seed: n.id });
       if (reward) game.completeNode(n.id);
       rerender({ popNode: currentNode()?.id });
       if (reward) pickFlyUp(reward.cherries);
@@ -131,7 +133,7 @@ export function renderHome(root, { message = null, popNode = null, refresh } = {
       h('span', { class: 'dr-ic' + (releaseReady ? ' ready' : ''), html: ICON.crate(!!game.G.quests.chestOpened) }),
       h('span', {}, game.G.quests.chestOpened ? 'Daily crate opened. A new one tomorrow!' : releaseReady ? 'All quests done! Open today\'s crate.' : 'Finish all three to open the daily crate'),
       releaseReady ? h('button', { class: 'btn primary small', type: 'button', onclick: async () => {
-        const r = await releaseOverlay({ version: 'v' + game.today().replace(/-/g, '.'), title: 'Daily crate', label: 'ALL QUESTS DONE', seed: 'quests' });
+        const r = await releaseOverlay({ version: dailyTag(game.today()), from: dailyTag(game.addDays(game.today(), -1)), title: 'Daily crate', label: 'ALL QUESTS DONE', seed: 'quests' });
         game.G.quests.chestOpened = true; game.save(); rerender(); if (r) pickFlyUp(r.cherries);
       } }, 'Open') : null));
 

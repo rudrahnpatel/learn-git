@@ -1210,7 +1210,7 @@ body[data-screen="lesson"] .toast { top: auto; bottom: calc(var(--foot-h, 100px)
 .release-panel .cel-title { font-size: 42px; }
 .release-panel .cel-sub { font-size: 18px; }
 .release-cmd { font-size: 12px; background: var(--ink); color: var(--on-ink); border-radius: 16px; padding: 8px 14px; max-width: 100%; overflow-wrap: anywhere; }
-.release-cmd.ok { background: var(--green-wash); color: var(--ink); white-space: pre; }
+.release-cmd.ok { background: var(--green-wash); color: var(--ink); white-space: pre-wrap; } /* keeps git's spacing, wraps on narrow phones */
 .release-reward { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .release-picked { color: var(--mute); font-size: 16px; }
 .rw-cherries { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; font-size: 20px; }

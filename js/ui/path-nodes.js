@@ -20,8 +20,16 @@ export function buildNodes(UNITS) {
     while (ci < challenges.length) { const id = challenges[ci++]; out.push({ id: `${unit.id}:challenge:${id}`, kind: 'challenge', unit, ui, levelId: id, title: levelById(id).title }); }
     if (lessons.some((l) => l.exercises.some((e) => e.type !== 'learn'))) out.push({ id: `${unit.id}:review`, kind: 'review', unit, ui, title: `${unit.title} review` });
   });
-  // Number the release tags in path order: v0.1, v0.2, ... and the very last one ships v1.0.
+  // Number the release tags like patch releases: v0.<unit>.<crate within the unit> (v0.4.2 = unit 4's second crate),
+  // and the very last one ships v1.0.0. Each also knows the tag before it (v0.0.0 for the first) so the crate can
+  // show the bump, v0.4.1 -> v0.4.2.
   const rel = out.filter((n) => n.kind === 'release');
-  rel.forEach((n, i) => { n.version = i === rel.length - 1 && rel.length > 1 ? 'v1.0' : `v0.${i + 1}`; n.title = `Release ${n.version}`; });
+  const inUnit = new Map();
+  rel.forEach((n, i) => {
+    const k = (inUnit.get(n.ui) || 0) + 1; inUnit.set(n.ui, k);
+    n.version = i === rel.length - 1 && rel.length > 1 ? 'v1.0.0' : `v0.${n.ui + 1}.${k}`;
+    n.prevVersion = i ? rel[i - 1].version : 'v0.0.0';
+    n.title = `Release ${n.version}`;
+  });
   return out;
 }

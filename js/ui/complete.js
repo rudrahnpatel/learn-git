@@ -194,7 +194,7 @@ function crateTagSVG(version) {
 
 // Reward crate overlay: tap the crate to open it; resolves with the reward ({ cherries, boost }).
 // The old release flavour stays as the finale: once the cherries are out, the tag ships.
-export function releaseOverlay({ version = 'v0.1', title = 'Reward crate', seed = '', label = `RELEASE ${version}` } = {}) {
+export function releaseOverlay({ version = 'v0.1.1', from = null, title = 'Reward crate', seed = '', label = `RELEASE ${version}` } = {}) {
   return new Promise((resolve) => {
     const root = document.getElementById('modal-root');
     const crate = h('span', { class: 'cs-crate', html: crateSVG({ cls: 'big', hinge: true }) });
@@ -235,7 +235,7 @@ export function releaseOverlay({ version = 'v0.1', title = 'Reward crate', seed 
       // 2. finale: the tag ships
       setTimeout(() => {
         stage.classList.add('shipped');
-        cmd.textContent = ` * [new tag]  ${version} -> ${version}`;
+        cmd.textContent = from ? ` * [new tag]  ${from} -> ${version}` : ` * [new tag]  ${version} -> ${version}`;
         cmd.classList.add('ok');
         msg.textContent = `Shipped ${version}!`;
         done.classList.remove('waiting');
