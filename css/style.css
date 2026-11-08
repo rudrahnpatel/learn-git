@@ -578,10 +578,15 @@ body[data-screen="lesson"] .shape, body[data-screen="challenge"] .shape { opacit
      the bank shrinks (n+1 rows instead of 2n) */
   .order-list .slot.empty ~ .slot.empty { display: none; }
   .order-bank .step-card.used { display: none; }
-  /* type: terminal first, then the graph/files card, which absorbs any shortfall */
-  .ex-type .type-grid { display: flex; flex-direction: column; align-items: stretch; gap: 10px; min-height: 0; flex: 0 1 auto; }
-  .type-right { order: -1; flex: none; }
-  .type-left { flex: 0 1 auto; padding: 12px; gap: 8px; }
+  /* type: question, then the graph/files card, then the terminal (it sits right above the keyboard). The exercise
+     starts at the top instead of being centred, and the graph card takes all the height that's left, so no band
+     of empty canvas sits above or below it */
+  .lesson-inner:has(.ex-type) { flex: 1 1 auto; margin: 0 auto; }
+  .ex-stage:has(.ex-type), .ex.ex-type { flex: 1 1 auto; }
+  .ex-type .type-grid { display: flex; flex-direction: column; align-items: stretch; gap: 10px; min-height: 0; flex: 1 1 auto; }
+  .type-right { flex: none; }
+  .type-left { flex: 1 1 0; min-height: 120px; padding: 12px; gap: 8px; }
+  .type-graph .graph-svg { zoom: 1.5; } /* the graph's default size here; GraphZoom shrinks it to fit a smaller card */
   /* the terminal sizes to its content (an empty one is just the input row), up to a cap */
   .type-term { height: auto; min-height: 104px; max-height: clamp(130px, 21vh, 200px); }
   .ex-type .ex-prompt { font-size: clamp(18px, 2.7vh, 22px); }
@@ -628,7 +633,8 @@ body[data-screen="lesson"] .shape, body[data-screen="challenge"] .shape { opacit
 .kb .ex-prompt { font-size: 16px; line-height: 1.3; }
 .kb .type-term { min-height: 0; max-height: 132px; }
 .kb .type-term .term-out { padding-top: 8px; }
-.kb .type-left { flex: none; max-height: 84px; padding: 4px 8px; overflow: auto; }
+/* the graph fills whatever the keyboard leaves between the question and the terminal (it fits itself to that box) */
+.kb .type-left { flex: 1 1 0; min-height: 64px; padding: 4px 8px; overflow: auto; }
 .kb .type-left .mini-head, .kb .type-trees, .kb .type-meta { display: none; }
 .kb .type-graph { min-height: 0; }
 

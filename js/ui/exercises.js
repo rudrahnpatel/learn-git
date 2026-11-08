@@ -352,7 +352,7 @@ function type(ex, ctx) {
     filesBtn.setAttribute('aria-expanded', String(open));
     filesBtn.textContent = `files · ${rows.length ? (dirty ? 'changes' : 'all clean') : 'none yet'}`;
   };
-  const g = new GraphView(graphBox, { size: 'mid', animated: true, zoom: { key: 'type', host: zoomHost, fitHeight: false, keepFocus } });
+  const g = new GraphView(graphBox, { size: 'mid', animated: true, zoom: { key: 'type', host: zoomHost, fitHeight: phone(), keepFocus } }); // phone: the card's height varies with the keyboard, so fit to it
   const term = new Terminal(termBox, {
     onCommand: (c) => run(c), getCompletions: () => repo.completions(), history: [], onHistory: () => {},
   });
