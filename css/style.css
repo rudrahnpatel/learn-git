@@ -1960,8 +1960,9 @@ body[data-screen="lesson"] .toast { top: auto; bottom: calc(var(--foot-h, 100px)
 
 /* lesson Back button (js/ui/lesson.js back()): a round icon button at the start of the footer; earlier cards come back
    read-only, an answered exercise with this note under it */
-.lesson-foot .back-btn { flex: none; width: 48px; height: 48px; font-size: 22px; line-height: 1; }
+.lesson-foot .back-btn { flex: none; width: 48px; height: 48px; }
+.lesson-foot .back-btn svg { display: block; } /* 22px like the quit × (.icon-btn.round svg) */
 .lesson-foot .back-btn.hidden { display: none; }
 .review-note { margin: 4px 0 0; font-size: 15px; color: var(--mute); }
 .review-note code { font-size: .9em; }
-@media (max-width: 760px) { .lesson-foot .back-btn { width: 44px; height: 44px; font-size: 20px; } }
+@media (max-width: 760px) { .lesson-foot .back-btn { width: 44px; height: 44px; } }

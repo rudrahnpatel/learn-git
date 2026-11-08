@@ -53,7 +53,7 @@ export function playSession(root, { title, items, mode = 'lesson', engine = 'git
   const body = h('main', { class: 'lesson-body' }, inner);
   const checkBtn = h('button', { class: 'btn primary big check', type: 'button', disabled: true, onclick: () => check() }, 'Check');
   const skipBtn = h('button', { class: 'btn ghost', type: 'button', onclick: () => skip() }, 'Can\'t do it now');
-  const backBtn = h('button', { class: 'icon-btn round back-btn', type: 'button', 'aria-label': 'Previous card', title: 'Previous card', onclick: () => back() }, '←');
+  const backBtn = h('button', { class: 'icon-btn round back-btn', type: 'button', 'aria-label': 'Previous card', title: 'Previous card', html: ICON.back(), onclick: () => back() });
   const footInner = h('div', { class: 'foot-inner' }, backBtn, skipBtn, checkBtn);
   const foot = h('footer', { class: 'lesson-foot' }, footInner);
   const el = h('div', { class: 'lesson' }, top, body, foot);
