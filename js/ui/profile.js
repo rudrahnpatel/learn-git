@@ -133,7 +133,8 @@ export function renderProfile(root) {
     h('div', { class: 'badges' }, game.ACHIEVEMENTS.map((a) => {
       const got = !!game.G.achievements[a.id];
       return h('div', { class: 'badge' + (got ? ' got' : ''), title: `${a.title}: ${a.text}`, style: got ? { '--fill': accent(a.color) } : {} },
-        h('span', { class: 'badge-disc', html: got ? ICON.trophy() : ICON.lock() }), h('span', { class: 'badge-t' }, a.title));
+        h('span', { class: 'badge-disc', html: got ? ICON.trophy() : ICON.lock() }), h('span', { class: 'badge-t' }, a.title),
+        h('span', { class: 'sr-only' }, `${got ? ', earned' : ', locked'}: ${a.text}`));
     })));
   root.replaceChildren(topbar('profile'), h('main', { class: 'profile' }, head, stats, heatmap(), accountCard(), ach));
   return null;

@@ -39,8 +39,12 @@ export class TreesView {
       const iTag = r.conflict ? ['unmerged', 'conflict'] : r.staged ? [r.head === undefined ? 'new, staged' : r.index === undefined ? 'deletion staged' : 'staged', 'staged'] : null;
       const cell = (text, tag, extra = '') => h('div', { class: `tc cell ${tag ? tag[1] : 'same'} ${extra}` },
         tag ? h('span', { class: 'tag ' + tag[1] }, tag[0]) : null, preview(text, open));
-      return h('div', { class: 'trow' + (open ? ' open' : ''), onclick: () => { open ? this.open.delete(r.path) : this.open.add(r.path); this.render(repo); }, title: 'click to expand' },
-        h('div', { class: 'tc name', title: r.path }, r.path, r.conflict ? h('span', { class: 'tag conflict' }, 'conflict') : null),
+      // the whole row expands on a click; the file name is the keyboard's way in (a real button, aria-expanded)
+      const toggle = (refocus) => { open ? this.open.delete(r.path) : this.open.add(r.path); this.render(repo); if (refocus) this.el.querySelector(`.tname[data-path="${CSS.escape(r.path)}"]`)?.focus({ preventScroll: true }); };
+      return h('div', { class: 'trow' + (open ? ' open' : ''), onclick: (e) => { if (!e.target.closest('.tname')) toggle(false); }, title: 'click to expand' },
+        h('div', { class: 'tc name', title: r.path },
+          h('button', { class: 'tname', type: 'button', 'data-path': r.path, 'aria-expanded': String(open), onclick: () => toggle(true) }, r.path),
+          r.conflict ? h('span', { class: 'tag conflict' }, 'conflict') : null),
         cell(r.untracked && !r.conflict ? r.work : r.work, wTag, r.markers ? 'markers' : ''),
         h('div', { class: 'tc arrow' }, wTag && !r.conflict ? '≠' : r.conflict ? '!' : '='),
         cell(r.untracked ? undefined : r.index, iTag),

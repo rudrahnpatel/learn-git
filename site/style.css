@@ -295,7 +295,7 @@ header.top nav { display: flex; align-items: center; gap: 16px; }
 .foot-name { margin: 0; font: 20px var(--mono); letter-spacing: 0; }
 .foot-tag { margin: 4px 0 0; color: var(--mute); font-size: 16px; }
 .foot-act { display: flex; align-items: center; gap: 20px; }
-.foot-link { color: var(--ink); font-size: 15px; text-underline-offset: 4px; }
+.foot-link { color: var(--ink); font-size: 15px; text-underline-offset: 4px; display: inline-block; padding-block: 2px; }
 .foot-end { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; padding-top: 16px; padding-bottom: 40px; border-top: 1px dashed var(--frost); color: var(--mute); font-size: 14px; }
 .foot-pager { font: 12px/20px var(--mono); letter-spacing: 0; background: var(--ink); color: var(--on-ink); padding: 0 8px; border-radius: 6px; }
 .foot-fine { margin-left: auto; }

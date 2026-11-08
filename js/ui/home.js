@@ -1,11 +1,11 @@
 // Home: the winding path of nodes, unit banners, Twig, and the side column (quests, streak
 // week, practice entry, achievements).
-import { h } from '../dom.js';
+import { h, announce } from '../dom.js';
 import { APP, REWARDS } from '../brand.js';
 const CUR = REWARDS.currency, FRZ = REWARDS.freeze, cap = (t) => t[0].toUpperCase() + t.slice(1);
 import { sfx } from '../sound.js';
 import { twig } from './twig.js';
-import { ICON, setShapes, toast, shake, accent, flyUp } from './fx.js';
+import { ICON, setShapes, toast, shake, accent, flyUp, glide } from './fx.js';
 import { topbar } from './topbar.js';
 import { commitLine, releaseOverlay } from './complete.js';
 import { UNITS, nodes, nodeStatus, crowns, unitProgress, currentNode, contentSource } from './path.js';
@@ -34,14 +34,18 @@ export function renderHome(root, { message = null, popNode = null, refresh } = {
   setShapes('home');
   document.title = APP.name;
   const cur = currentNode();
-  let popover = null;
-  const closePop = () => {
+  let popover = null, opener = null;
+  // refocus: put the focus back on the node that opened it (Escape, or Tab leaving the popover)
+  const closePop = ({ refocus = false } = {}) => {
     document.querySelectorAll('.has-pop').forEach((el) => el.classList.remove('has-pop'));
+    const had = popover?.contains(document.activeElement);
     popover?.remove(); popover = null;
+    if (refocus && had && opener?.isConnected) opener.focus({ preventScroll: true });
   };
 
   /* ---------------------------------------------------------------- path */
-  const pathCol = h('div', { class: 'path-col' });
+  // the path is the page's main content; its heading is for screen readers (the banners carry the visual titles)
+  const pathCol = h('main', { class: 'path-col', 'aria-labelledby': 'path-h' }, h('h1', { class: 'sr-only', id: 'path-h' }, 'Your learning path'));
   let k = 0;
   for (const unit of UNITS) {
     const prog = unitProgress(unit);
@@ -99,13 +103,18 @@ export function renderHome(root, { message = null, popNode = null, refresh } = {
       n.kind === 'release' ? h('span', { class: 'pop-crate', html: ICON.crate(false) }) : null,
       h('span', { class: 'mono tiny' }, label + (st === 'skipped' ? ' · SKIPPED' : '')), h('h3', {}, n.kind === 'release' ? 'Reward crate' : n.title), h('p', {}, meta), go);
     if (n.kind === 'release') popover.classList.add('crate-pop');
+    // keyboard: it opens with the focus on its button, sits right after the node in the tab order, closes on Escape
+    // (focus back on the node) and when the focus moves on past it
+    opener = btn;
+    const pop = popover;
+    pop.addEventListener('focusout', (e) => { if (e.relatedTarget && !pop.contains(e.relatedTarget) && e.relatedTarget !== btn && popover === pop) closePop(); });
     btn.parentElement.append(popover);
     btn.parentElement.classList.add('has-pop');                 // .node-wrap
     btn.closest('.path-row')?.classList.add('has-pop');         // and its row, in case the row is a stacking context too
     // Open upward when there isn't room below the node (and there is above); otherwise scroll it into view.
     const nb = btn.getBoundingClientRect(), ph = popover.offsetHeight + 24, top = document.querySelector('.topbar')?.offsetHeight || 0;
     if (nb.bottom + ph > innerHeight && nb.top - ph > top) popover.classList.add('above');
-    else if (nb.bottom + ph > innerHeight) popover.scrollIntoView({ block: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    else if (nb.bottom + ph > innerHeight) popover.scrollIntoView({ block: 'nearest', behavior: glide() });
     go.focus({ preventScroll: true });
   }
   async function start(n) {
@@ -114,6 +123,7 @@ export function renderHome(root, { message = null, popNode = null, refresh } = {
       const reward = await releaseOverlay({ version: n.version, from: n.prevVersion, seed: n.id });
       if (reward) game.completeNode(n.id);
       rerender({ popNode: currentNode()?.id });
+      refocus(`[data-node="${CSS.escape(n.id)}"] .pnode`);
       if (reward) pickFlyUp(reward.cherries);
       return;
     }
@@ -127,14 +137,15 @@ export function renderHome(root, { message = null, popNode = null, refresh } = {
   const questCard = h('section', { class: 'card side-card quests' },
     h('div', { class: 'card-head' }, h('h3', {}, 'Daily quests'), h('span', { class: 'mono tiny' }, 'NEW ONES AT MIDNIGHT')),
     qs.map((q) => h('div', { class: 'quest' + (q.done ? ' done' : '') },
-      h('div', { class: 'q-top' }, h('span', {}, q.text), h('span', { class: 'q-cherries', 'aria-label': CUR.count(q.cherries) }, h('span', { html: CUR.icon() }), String(q.cherries))),
+      h('div', { class: 'q-top' }, h('span', {}, q.text), h('span', { class: 'q-cherries' }, h('span', { html: CUR.icon() }), String(q.cherries), h('span', { class: 'sr-only' }, ` ${CUR.many}${q.done ? ', done' : ''}`))),
       h('div', { class: 'qbar' }, h('div', { class: 'qbar-fill', style: { width: `${(q.progress / q.n) * 100}%` } }), h('span', { class: 'qbar-n mono' }, `${q.progress}/${q.n}`)))),
     h('div', { class: 'daily-release' + (releaseReady ? ' ready' : '') },
       h('span', { class: 'dr-ic' + (releaseReady ? ' ready' : ''), html: ICON.crate(!!game.G.quests.chestOpened) }),
       h('span', {}, game.G.quests.chestOpened ? 'Daily crate opened. A new one tomorrow!' : releaseReady ? 'All quests done! Open today\'s crate.' : 'Finish all three to open the daily crate'),
       releaseReady ? h('button', { class: 'btn primary small', type: 'button', onclick: async () => {
         const r = await releaseOverlay({ version: dailyTag(game.today()), from: dailyTag(game.addDays(game.today(), -1)), title: 'Daily crate', label: 'ALL QUESTS DONE', seed: 'quests' });
-        game.G.quests.chestOpened = true; game.save(); rerender(); if (r) pickFlyUp(r.cherries);
+        if (!r) return; // closed with Escape before it was opened: it stays ready
+        game.G.quests.chestOpened = true; game.save(); rerender(); refocus('.quests h3', true); pickFlyUp(r.cherries);
       } }, 'Open') : null));
 
   const s = game.shownStreak();
@@ -143,7 +154,7 @@ export function renderHome(root, { message = null, popNode = null, refresh } = {
     'aria-label': stashFull ? `${cap(FRZ.many)} full` : `${FRZ.verb} for ${CUR.count(game.STASH_COST)}`,
     onclick: () => {
       if (!game.buyStash()) return;
-      sfx.stash(); toast('Streak stashed. It pops itself if you miss a day.', { icon: FRZ.icon() }); rerender();
+      sfx.stash(); toast('Streak stashed. It pops itself if you miss a day.', { icon: FRZ.icon() }); rerender(); refocus(['.stash-btn:not(:disabled)', '.streak-card .streak-n'], true);
       flyUp(document.querySelector('.stash-row .stashes'), `−${game.STASH_COST}`, 'cherry', { icon: CUR.icon() });
       const fz = document.querySelectorAll('.fz.on'); fz[fz.length - 1]?.classList.add('fresh');
     } },
@@ -169,7 +180,8 @@ export function renderHome(root, { message = null, popNode = null, refresh } = {
     h('div', { class: 'badges' }, game.ACHIEVEMENTS.map((a) => {
       const got = !!game.G.achievements[a.id];
       return h('div', { class: 'badge' + (got ? ' got' : ''), title: `${a.title}: ${a.text}`, style: got ? { '--fill': accent(a.color) } : {} },
-        h('span', { class: 'badge-disc', html: got ? ICON.trophy() : ICON.lock() }), h('span', { class: 'badge-t' }, a.title));
+        h('span', { class: 'badge-disc', html: got ? ICON.trophy() : ICON.lock() }), h('span', { class: 'badge-t' }, a.title),
+        h('span', { class: 'sr-only' }, `${got ? ', earned' : ', locked'}: ${a.text}`));
     })));
 
   const boost = game.boostActive() ? h('div', { class: 'boost-banner', role: 'status' }, h('span', { class: 'ff-ic', html: ICON.ff() }), h('span', {}, 'Fast-forward · 2× XP · ', h('span', { class: 'mono' }, `${game.boostLeftMin()} min left`))) : null;
@@ -186,18 +198,31 @@ export function renderHome(root, { message = null, popNode = null, refresh } = {
   const onDoc = () => closePop();
   document.addEventListener('click', onDoc);
   const onKey = (e) => {
-    if (e.key === 'Escape') closePop();
-    if (e.key === 'Enter' && e.target === document.body && cur && !document.querySelector('.modal-wrap')) start(cur);
+    if (e.key === 'Escape' && popover) closePop({ refocus: true });
+    // Enter with nothing focused (or only the page heading, where a route change leaves it) starts the current node
+    if (e.key === 'Enter' && (e.target === document.body || e.target.id === 'path-h') && cur && !document.querySelector('.modal-wrap')) start(cur);
   };
   document.addEventListener('keydown', onKey);
 
   // bring the current node into view; pop the newly unlocked one
   requestAnimationFrame(() => {
     const row = cur && root.querySelector(`[data-node="${CSS.escape(cur.id)}"]`);
-    if (row) row.scrollIntoView({ block: 'center', behavior: popNode ? 'smooth' : 'auto' });
-    if (popNode) setTimeout(() => sfx.unlock(), 350);
+    if (row) row.scrollIntoView({ block: 'center', behavior: popNode ? glide() : 'auto' });
+    if (popNode) { setTimeout(() => sfx.unlock(), 350); const n = nodes().find((x) => x.id === popNode); if (n) announce(`Unlocked: ${n.kind === 'release' ? 'a reward crate' : n.title}.`); }
+    else if (message) announce(message); // the stash-pop / lost-streak news from boot
   });
   return () => { document.removeEventListener('click', onDoc); document.removeEventListener('keydown', onKey); };
+}
+
+// After a re-render the old focused control is gone: put the focus on its new copy (or a heading near it).
+// sel: a selector, or a list tried in order.
+function refocus(sel, quiet = false) {
+  requestAnimationFrame(() => {
+    const el = [sel].flat().map((s) => document.querySelector(s)).find(Boolean);
+    if (!el) return;
+    if (!el.matches('button, a, input')) { el.setAttribute('tabindex', '-1'); if (quiet) el.classList.add('focus-quiet'); }
+    el.focus({ preventScroll: true });
+  });
 }
 
 // "+12" cherries dropping out of the top bar after a crate is opened.

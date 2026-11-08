@@ -2,7 +2,7 @@
 //   { el, ready(), grade() -> { ok, answer }, key(e) -> handled, lock(), learn?, focus? }
 // The lesson player owns the Check button and the feedback sheet; ctx.onChange() tells it the
 // answer state changed, ctx.submit() asks it to check now (match does that when all pairs pop).
-import { h, esc } from '../dom.js';
+import { h, esc, announce } from '../dom.js';
 import { Repo } from '../git.js';
 import { GraphView } from '../graph.js';
 import { Terminal, phone } from '../terminal.js';
@@ -22,7 +22,21 @@ function shuffledIdx(n, avoidIdentity = true) {
   return idx;
 }
 const digit = (e) => (/^[1-9]$/.test(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey ? Number(e.key) - 1 : -1);
-const prompt = (ex) => richEl('h2', { class: 'ex-prompt' }, ex.prompt || '');
+const prompt = (ex) => richEl('h2', { class: 'ex-prompt', id: 'ex-prompt' }, ex.prompt || '');
+// Screen-reader text (accessibility pass): the keyboard-shortcut badges are visual only, and the green/pink marks
+// after grading also say "correct answer" / "your answer, not right" in words.
+const sr = (t) => h('span', { class: 'sr-only' }, t);
+const keyBadge = (cls, k) => h('span', { class: cls, 'aria-hidden': 'true' }, k);
+const mark = (el, t) => {
+  if (!el || el.dataset.marked) return;
+  el.dataset.marked = '1';
+  if (el.hasAttribute('aria-label')) el.setAttribute('aria-label', `${el.getAttribute('aria-label')} (${t})`);
+  else el.append(h('span', { class: 'sr-only' }, ` (${t})`));
+};
+const plain = (s) => String(s ?? '').replace(/<[^>]+>/g, '');
+// After a click removes or disables the focused control, the focus moves to the next sensible one instead of
+// dropping to the page.
+const focusFirst = (...els) => { const t = els.flat().find((b) => b && b.isConnected && !b.disabled && b.getClientRects().length); t?.focus({ preventScroll: true }); return !!t; };
 
 export function buildRepo(setup) {
   const r = new Repo();
@@ -98,7 +112,7 @@ function learn(ex) {
 function optionList(options, onPick, { cls = '' } = {}) {
   let sel = -1;
   const btns = options.map((o, i) => h('button', { class: 'opt ' + cls, type: 'button', 'aria-pressed': 'false', onclick: () => pick(i) },
-    h('span', { class: 'key mono' }, String(i + 1)), richEl('span', { class: 'opt-t' }, o)));
+    keyBadge('key mono', String(i + 1)), richEl('span', { class: 'opt-t' }, o)));
   const pick = (i) => {
     if (list.classList.contains('locked') || i < 0 || i >= btns.length) return;
     sel = i;
@@ -106,7 +120,7 @@ function optionList(options, onPick, { cls = '' } = {}) {
     sfx.tap();
     onPick(i);
   };
-  const list = h('div', { class: 'opts' }, btns);
+  const list = h('div', { class: 'opts', role: 'group', 'aria-labelledby': 'ex-prompt' }, btns);
   return { list, btns, pick, get sel() { return sel; } };
 }
 function choice(ex, ctx) {
@@ -117,7 +131,8 @@ function choice(ex, ctx) {
     grade: () => {
       const ok = ol.sel === ex.answer;
       ol.btns[ex.answer]?.classList.add('right');
-      if (!ok) ol.btns[ol.sel]?.classList.add('wrong');
+      mark(ol.btns[ex.answer], ok ? 'your answer, correct' : 'correct answer');
+      if (!ok) { ol.btns[ol.sel]?.classList.add('wrong'); mark(ol.btns[ol.sel], 'your answer, not right'); }
       return { ok, answer: ex.options[ex.answer] };
     },
     key: (e) => { const d = digit(e); if (d >= 0 && d < ex.options.length) { ol.pick(d); return true; } return false; },
@@ -127,7 +142,7 @@ function choice(ex, ctx) {
 
 /* ================================================================ fill */
 function fill(ex, ctx) {
-  const blank = h('span', { class: 'blank' }, ' ');
+  const blank = h('span', { class: 'blank' }, ' ', sr('(blank)'));
   const ol = optionList(ex.options, (i) => { blank.textContent = ex.options[i].replace(/<[^>]+>/g, ''); blank.classList.add('filled'); blank.classList.remove('pop'); void blank.offsetWidth; blank.classList.add('pop'); ctx.onChange(); }, { cls: 'pill-opt' });
   ol.list.classList.add('opts-row');
   return {
@@ -137,6 +152,8 @@ function fill(ex, ctx) {
     grade: () => {
       const ok = ol.sel === ex.answer;
       blank.classList.add(ok ? 'right' : 'wrong');
+      mark(ol.btns[ex.answer], ok ? 'your answer, correct' : 'correct answer');
+      if (!ok) mark(ol.btns[ol.sel], 'your answer, not right');
       return { ok, answer: `${ex.before || ''}${String(ex.options[ex.answer]).replace(/<[^>]+>/g, '')}${ex.after || ''}`.trim(), mono: true };
     },
     key: (e) => { const d = digit(e); if (d >= 0 && d < ex.options.length) { ol.pick(d); return true; } return false; },
@@ -149,21 +166,37 @@ function build(ex, ctx) {
   const order = shuffledIdx(ex.tiles.length, false);
   const placed = []; // tile indexes in answer order
   let locked = false;
-  const line = h('div', { class: 'build-line', 'aria-label': 'Your answer' });
+  // keyboard and screen readers: every tile is a real button; a used tile is disabled, the focus moves on to the
+  // next free tile (or back to the bank when a tile is taken out), and the answer so far is read out
+  const line = h('div', { class: 'build-line', role: 'group', 'aria-label': 'Your answer' });
   const bankBtns = {};
-  const bank = h('div', { class: 'bank' }, order.map((ti, pos) => {
-    const b = h('button', { class: 'tile mono', type: 'button', onclick: () => add(ti) }, h('span', { class: 'tk mono' }, pos < 9 ? String(pos + 1) : ''), ex.tiles[ti]);
+  const bank = h('div', { class: 'bank', role: 'group', 'aria-label': 'Tiles' }, order.map((ti, pos) => {
+    const b = h('button', { class: 'tile mono', type: 'button', onclick: () => add(ti) }, h('span', { class: 'tk mono', 'aria-hidden': 'true' }, pos < 9 ? String(pos + 1) : ''), ex.tiles[ti]);
     bankBtns[ti] = b;
     return b;
   }));
+  const said = () => announce(placed.length ? `Your answer: ${tokens().join(' ')}` : 'Your answer is empty');
   const draw = () => {
-    line.replaceChildren(...placed.map((ti, k) => h('button', { class: 'tile mono in', type: 'button', onclick: () => removeAt(k) }, ex.tiles[ti])));
+    line.replaceChildren(...placed.map((ti, k) => h('button', { class: 'tile mono in', type: 'button', 'aria-label': `${ex.tiles[ti]}, tile ${k + 1} of your answer. Press to take it out.`, onclick: () => removeAt(k) }, ex.tiles[ti])));
     if (!placed.length) line.append(h('span', { class: 'build-hint' }, 'Tap the tiles to build the command'));
-    for (const [ti, b] of Object.entries(bankBtns)) b.classList.toggle('used', placed.includes(Number(ti)));
+    for (const [ti, b] of Object.entries(bankBtns)) { const used = placed.includes(Number(ti)); b.classList.toggle('used', used); b.disabled = used || locked; }
     ctx.onChange();
   };
-  const add = (ti) => { if (locked || placed.includes(ti)) return; placed.push(ti); sfx.tap(); draw(); line.lastElementChild?.classList.add('pop'); };
-  const removeAt = (k) => { if (locked) return; placed.splice(k, 1); sfx.tap(); draw(); };
+  const seq = order.map((ti) => bankBtns[ti]); // bank buttons in screen order
+  const add = (ti) => {
+    if (locked || placed.includes(ti)) return;
+    const had = document.activeElement === bankBtns[ti];
+    placed.push(ti); sfx.tap(); draw(); line.lastElementChild?.classList.add('pop'); said();
+    const i = order.indexOf(ti);
+    if (had) focusFirst(seq.slice(i + 1), seq.slice(0, i), document.querySelector('.lesson-foot .check'));
+  };
+  const removeAt = (k) => {
+    if (locked) return;
+    const had = line.contains(document.activeElement);
+    const ti = placed[k];
+    placed.splice(k, 1); sfx.tap(); draw(); said();
+    if (had) focusFirst(bankBtns[ti]);
+  };
   draw();
   const tokens = () => placed.map((ti) => ex.tiles[ti]);
   return {
@@ -191,31 +224,46 @@ function order(ex, ctx) {
   const bankOrder = shuffledIdx(n);
   const placed = [];
   let locked = false;
-  const list = h('ol', { class: 'order-list' });
+  // same keyboard model as build: used steps are disabled and the focus moves to the next free one
+  const list = h('ol', { class: 'order-list', 'aria-label': 'Your order' });
   const bankBtns = {};
-  const bank = h('div', { class: 'order-bank' }, bankOrder.map((si, pos) => {
-    const b = h('button', { class: 'step-card', type: 'button', onclick: () => add(si) }, h('span', { class: 'key mono' }, String(pos + 1)), richEl('span', {}, ex.steps[si]));
+  const bank = h('div', { class: 'order-bank', role: 'group', 'aria-label': 'Steps to place' }, bankOrder.map((si, pos) => {
+    const b = h('button', { class: 'step-card', type: 'button', onclick: () => add(si) }, keyBadge('key mono', String(pos + 1)), richEl('span', {}, ex.steps[si]));
     bankBtns[si] = b; return b;
   }));
   const draw = () => {
     list.replaceChildren(...Array.from({ length: n }, (_, k) => {
       const si = placed[k];
       return si === undefined
-        ? h('li', { class: 'slot empty' }, h('span', { class: 'num mono' }, String(k + 1)))
-        : h('li', { class: 'slot' }, h('button', { class: 'step-card in', type: 'button', onclick: () => removeAt(k) }, h('span', { class: 'num mono' }, String(k + 1)), richEl('span', {}, ex.steps[si])));
+        ? h('li', { class: 'slot empty' }, h('span', { class: 'num mono', 'aria-hidden': 'true' }, String(k + 1)), sr('empty'))
+        : h('li', { class: 'slot' }, h('button', { class: 'step-card in', type: 'button', 'aria-label': `${k + 1}: ${plain(ex.steps[si])}. Press to take it out.`, onclick: () => removeAt(k) }, h('span', { class: 'num mono' }, String(k + 1)), richEl('span', {}, ex.steps[si])));
     }));
-    for (const [si, b] of Object.entries(bankBtns)) b.classList.toggle('used', placed.includes(Number(si)));
+    for (const [si, b] of Object.entries(bankBtns)) { const used = placed.includes(Number(si)); b.classList.toggle('used', used); b.disabled = used || locked; }
     ctx.onChange();
   };
-  const add = (si) => { if (locked || placed.includes(si)) return; placed.push(si); sfx.tap(); draw(); list.children[placed.length - 1]?.classList.add('pop'); };
-  const removeAt = (k) => { if (locked) return; placed.splice(k, 1); sfx.tap(); draw(); };
+  const seq = bankOrder.map((si) => bankBtns[si]);
+  const add = (si) => {
+    if (locked || placed.includes(si)) return;
+    const had = document.activeElement === bankBtns[si];
+    placed.push(si); sfx.tap(); draw(); list.children[placed.length - 1]?.classList.add('pop');
+    announce(`Step ${placed.length}: ${plain(ex.steps[si])}`);
+    const i = bankOrder.indexOf(si);
+    if (had) focusFirst(seq.slice(i + 1), seq.slice(0, i), document.querySelector('.lesson-foot .check'));
+  };
+  const removeAt = (k) => {
+    if (locked) return;
+    const had = list.contains(document.activeElement), si = placed[k];
+    placed.splice(k, 1); sfx.tap(); draw();
+    announce(`Took out ${plain(ex.steps[si])}. ${placed.length} of ${n} placed.`);
+    if (had) focusFirst(bankBtns[si]);
+  };
   draw();
   return {
     el: h('div', { class: 'ex ex-order' }, prompt(ex), list, bank),
     ready: () => placed.length === n,
     grade: () => {
       const ok = placed.every((si, k) => si === k);
-      [...list.children].forEach((li, k) => li.classList.add(placed[k] === k ? 'right' : 'wrong'));
+      [...list.children].forEach((li, k) => { li.classList.add(placed[k] === k ? 'right' : 'wrong'); mark(li.querySelector('button'), placed[k] === k ? 'right place' : 'wrong place'); });
       return { ok, answer: ex.steps.map((s, i) => `${i + 1}. ${String(s).replace(/<[^>]+>/g, '')}`).join('   ') };
     },
     key: (e) => {
@@ -237,31 +285,40 @@ function match(ex, ctx) {
   const tryPair = () => {
     if (selL == null || selR == null) return;
     const a = lb[selL], b = rb[selR];
+    const had = document.activeElement === a || document.activeElement === b;
+    const sel = (x, on) => { x.classList.toggle('sel', on); x.setAttribute('aria-pressed', String(on)); };
     if (selL === selR) {
       a.classList.add('matched'); b.classList.add('matched'); a.disabled = b.disabled = true;
-      a.classList.remove('sel'); b.classList.remove('sel');
+      sel(a, false); sel(b, false);
+      mark(a, 'matched'); mark(b, 'matched');
       matched++; sfx.pop();
+      announce(matched === pairs.length ? 'All pairs matched.' : `Matched: ${plain(pairs[selL][0])} with ${plain(pairs[selL][1])}. ${pairs.length - matched} left.`);
       if (matched === pairs.length) { ctx.onChange(); setTimeout(() => ctx.submit(), 380); }
+      // the matched pair is disabled: carry the focus to the next open item on the left (or Check, at the end)
+      if (had) focusFirst(L.map((i) => lb[i]), R.map((i) => rb[i]), document.querySelector('.lesson-foot .check'));
     } else {
       wrongs++;
       sfx.wrong();
+      announce('Not a pair. Try again.');
       a.classList.add('bad'); b.classList.add('bad'); shake(a); shake(b);
-      setTimeout(() => { a.classList.remove('bad', 'sel'); b.classList.remove('bad', 'sel'); }, 520);
+      setTimeout(() => { a.classList.remove('bad'); b.classList.remove('bad'); sel(a, false); sel(b, false); }, 520);
     }
     selL = selR = null;
   };
   const mk = (side, i, label, k) => h('button', {
-    class: 'match-btn', type: 'button',
+    class: 'match-btn', type: 'button', 'aria-pressed': 'false',
     onclick: (e) => {
       if (locked) return;
       const btn = e.currentTarget;
-      if (side === 'L') { Object.values(lb).forEach((x) => x.classList.remove('sel')); selL = i; } else { Object.values(rb).forEach((x) => x.classList.remove('sel')); selR = i; }
-      btn.classList.add('sel'); sfx.tap();
+      const col = side === 'L' ? lb : rb;
+      Object.values(col).forEach((x) => { x.classList.remove('sel'); x.setAttribute('aria-pressed', 'false'); });
+      if (side === 'L') selL = i; else selR = i;
+      btn.classList.add('sel'); btn.setAttribute('aria-pressed', 'true'); sfx.tap();
       tryPair();
     },
-  }, h('span', { class: 'key mono' }, k), richEl('span', {}, label));
-  const left = h('div', { class: 'match-col' }, L.map((i, k) => (lb[i] = mk('L', i, pairs[i][0], String(k + 1)))));
-  const right = h('div', { class: 'match-col' }, R.map((i, k) => (rb[i] = mk('R', i, pairs[i][1], String.fromCharCode(97 + k)))));
+  }, keyBadge('key mono', k), richEl('span', {}, label));
+  const left = h('div', { class: 'match-col', role: 'group', 'aria-label': 'Left column' }, L.map((i, k) => (lb[i] = mk('L', i, pairs[i][0], String(k + 1)))));
+  const right = h('div', { class: 'match-col', role: 'group', 'aria-label': 'Right column' }, R.map((i, k) => (rb[i] = mk('R', i, pairs[i][1], String.fromCharCode(97 + k)))));
   return {
     el: h('div', { class: 'ex ex-match' }, prompt(ex), h('div', { class: 'match-grid' }, left, right)),
     ready: () => matched === pairs.length,
@@ -298,20 +355,22 @@ function graph(ex, ctx) {
   shuffle(opts);
   const right = opts.findIndex((o) => o.ok);
   const ol = optionList(opts.map(() => ''), () => ctx.onChange(), { cls: 'graph-opt' });
-  ol.btns.forEach((b, i) => { b.querySelector('.opt-t').replaceWith(miniGraph(opts[i].data, { size: 'mid' })); b.__ok = opts[i].ok; });
+  // each option is read as "Graph n" plus the graph's text summary (js/graph.js describeGraph)
+  ol.btns.forEach((b, i) => { b.querySelector('.opt-t').replaceWith(sr(`Graph ${i + 1}: `), miniGraph(opts[i].data, { size: 'mid' })); b.__ok = opts[i].ok; });
   ol.list.classList.add('graph-opts', 'n' + opts.length);
   return {
     el: h('div', { class: 'ex ex-graph' }, prompt(ex),
       h('div', { class: 'graph-start card' },
         h('div', { class: 'gs-col' }, h('span', { class: 'tag-pill mono' }, 'START'), miniGraph(start, { size: 'mid' })),
-        h('div', { class: 'gs-arrow' }, h('code', { class: 'cmd-pill' }, ex.command), h('span', { class: 'gs-arr', 'aria-hidden': 'true' }, '→'), h('span', { class: 'gs-q' }, '?'))),
+        h('div', { class: 'gs-arrow' }, sr('then run '), h('code', { class: 'cmd-pill' }, ex.command), h('span', { class: 'gs-arr', 'aria-hidden': 'true' }, '→'), h('span', { class: 'gs-q', 'aria-hidden': 'true' }, '?'))),
       h('p', { class: 'ex-sub' }, 'Pick the graph you end up with.'),
       ol.list),
     ready: () => ol.sel >= 0,
     grade: () => {
       const ok = ol.sel === right;
       ol.btns[right]?.classList.add('right');
-      if (!ok) ol.btns[ol.sel]?.classList.add('wrong');
+      mark(ol.btns[right], ok ? 'your answer, correct' : 'correct answer');
+      if (!ok) { ol.btns[ol.sel]?.classList.add('wrong'); mark(ol.btns[ol.sel], 'your answer, not right'); }
       return { ok, answer: `graph ${right + 1}` };
     },
     key: (e) => { const d = digit(e); if (d >= 0 && d < opts.length) { ol.pick(d); return true; } return false; },
@@ -357,6 +416,10 @@ function type(ex, ctx) {
     onCommand: (c) => run(c), getCompletions: () => repo.completions(), history: [], onHistory: () => {},
   });
   term.input.placeholder = phone() ? 'git command…' : 'type a git command';
+  term.input.setAttribute('aria-describedby', `ex-prompt type-count ${term.input.getAttribute('aria-describedby') || ''}`.trim());
+  counter.id = 'type-count';
+  treesBox.id = 'type-files';
+  filesBtn.setAttribute('aria-controls', 'type-files');
   term.input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !term.input.value.trim()) { e.preventDefault(); e.stopPropagation(); ctx.submit(); }
   });
@@ -385,7 +448,11 @@ function type(ex, ctx) {
     term.print(res.lines);
     refresh(true);
     sfx.tap();
-    if (cmds.length >= MAX) { term.input.disabled = true; term.note('That\'s 3 commands. Press Check.'); }
+    if (cmds.length >= MAX) {
+      const had = document.activeElement === term.input;
+      term.input.disabled = true; term.note('That\'s 3 commands. Press Check.');
+      if (had) setTimeout(() => document.querySelector('.lesson-foot .check')?.focus({ preventScroll: true }), 0); // the disabled input would drop it
+    }
     ctx.onChange();
   };
   reset();
@@ -395,7 +462,7 @@ function type(ex, ctx) {
         h('div', { class: 'type-left card' }, zoomHost, graphBox,
           h('div', { class: 'mini-head' }, filesBtn), treesBox),
         h('div', { class: 'type-right' }, termBox,
-          h('div', { class: 'type-meta' }, counter, h('button', { class: 'btn ghost small', type: 'button', onclick: () => { if (!locked) { reset(); term.focus(); } } }, '↻ Reset repo'))))),
+          h('div', { class: 'type-meta' }, counter, h('button', { class: 'btn ghost small', type: 'button', onclick: () => { if (!locked) { reset(); term.focus(); announce('Repo reset to the start.'); } } }, h('span', { 'aria-hidden': 'true' }, '↻ '), 'Reset repo'))))),
     ready: () => cmds.length > 0,
     grade: () => {
       let ok = false;
@@ -404,7 +471,8 @@ function type(ex, ctx) {
     },
     key: () => false,
     lock: () => { locked = true; term.input.disabled = true; },
-    focus: () => { if (matchMedia('(pointer: fine)').matches) term.focus(); },
+    // returns true when it took the focus (the lesson player focuses the prompt otherwise)
+    focus: () => { if (!matchMedia('(pointer: fine)').matches) return false; term.focus(); return true; },
   };
 }
 

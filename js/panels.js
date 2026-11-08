@@ -1,5 +1,5 @@
 // Modal tools: conflict surgeon, interactive-rebase todo editor, file editor.
-import { h, modal } from './dom.js';
+import { h, modal, announce } from './dom.js';
 import { splitLines, joinLines, firstLine } from './git.js';
 
 /* ------------------------------------------------------- conflict surgeon */
@@ -55,9 +55,9 @@ export function openSurgeon(repo, { onSave, inRebase }) {
     const cards = hunks.map(({ hunk }, i) => {
       const opts = [['ours', 'Keep ours'], ['theirs', 'Keep theirs'], ['both', 'Both, ours first'], ['both-rev', 'Both, theirs first']];
       const btns = opts.map(([v, label]) => h('button', {
-        class: 'btn small seg', type: 'button', onclick: (e) => {
+        class: 'btn small seg', type: 'button', 'aria-pressed': 'false', onclick: (e) => {
           choices[i] = v;
-          e.target.parentElement.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b === e.target));
+          e.currentTarget.parentElement.querySelectorAll('button').forEach((b) => { b.classList.toggle('active', b === e.currentTarget); b.setAttribute('aria-pressed', String(b === e.currentTarget)); });
           sync();
         },
       }, label));
@@ -66,12 +66,12 @@ export function openSurgeon(repo, { onSave, inRebase }) {
         h('div', { class: 'sides' },
           h('div', { class: 'side ours' }, h('div', { class: 'side-label' }, h('b', {}, 'ours'), ` · ${hunk.oursLabel || 'HEAD'}`), h('pre', {}, hunk.ours.join('\n') || '(nothing)')),
           h('div', { class: 'side theirs' }, h('div', { class: 'side-label' }, h('b', {}, 'theirs'), ` · ${hunk.theirsLabel}`), h('pre', {}, hunk.theirs.join('\n') || '(nothing)'))),
-        h('div', { class: 'seg-row' }, btns));
+        h('div', { class: 'seg-row', role: 'group', 'aria-label': `Resolve hunk ${i + 1}` }, btns));
     });
     const save = (add) => {
       onSave(current, result.value, add);
       const left = Object.keys(repo.s.work).filter((p) => /^<{7} /m.test(repo.s.work[p])).sort();
-      if (left.length) { current = left[0]; draw(); } else m.close();
+      if (left.length) { current = left[0]; draw(); body.querySelector('button')?.focus(); announce(`Saved. Next file: ${current}.`); } else m.close();
     };
     body.replaceChildren(...[
       files.length > 1 ? h('div', { class: 'file-tabs' }, files.map((f) => h('button', { class: 'chip' + (f === current ? ' active' : ''), onclick: () => { current = f; draw(); } }, f))) : null,
@@ -110,19 +110,29 @@ export function openRebaseTodo(repo, { onStart, onCancel }) {
     h('div', { class: 'modal-actions' },
       h('button', { class: 'btn', onclick: () => m.close() }, 'Cancel (rebase --abort)'),
       h('button', { class: 'btn primary', onclick: () => { started = true; const res = onStart(rows.map((r) => ({ action: r.action, id: r.id, msg: r.action === 'reword' ? r.msg : undefined }))); if (res && !res.ok && repo.s.pendingRebase) { started = false; err.textContent = res.lines.map((l) => l.t).join(' '); } else m.close(); } }, 'Start rebase')));
-  const draw = () => {
+  // every control is labelled with its commit; after a redraw the focus returns to the same control of the same
+  // commit (the moved row, or the select that changed), and moves are announced
+  const draw = (focusId = null, focusWhat = null) => {
     list.replaceChildren(...rows.map((r, i) => {
-      const sel = h('select', { 'aria-label': 'action', onchange: (e) => { r.action = e.target.value; draw(); } },
+      const what = firstLine(repo.commit(r.id).msg);
+      const sel = h('select', { 'aria-label': `Action for ${r.id} ${what}`, 'data-f': 'sel', onchange: (e) => { r.action = e.target.value; draw(r.id, 'sel'); } },
         ACTIONS.map(([a]) => h('option', { value: a, selected: a === r.action }, a)));
       const msg = r.action === 'reword'
-        ? h('input', { class: 'reword', value: firstLine(r.msg), 'aria-label': 'new message', oninput: (e) => { r.msg = e.target.value; } })
-        : h('span', { class: 'tmsg' + (r.action === 'drop' ? ' dropped' : '') }, firstLine(repo.commit(r.id).msg));
-      return h('li', { class: 'todo-row a-' + r.action },
+        ? h('input', { class: 'reword', value: firstLine(r.msg), 'aria-label': `New message for ${r.id}`, oninput: (e) => { r.msg = e.target.value; } })
+        : h('span', { class: 'tmsg' + (r.action === 'drop' ? ' dropped' : '') }, what);
+      const move = (d, f) => { [rows[i + d], rows[i]] = [rows[i], rows[i + d]]; draw(r.id, f); announce(`${r.id} moved to line ${i + d + 1} of ${rows.length}.`); };
+      return h('li', { class: 'todo-row a-' + r.action, 'data-id': r.id },
         sel, h('code', { class: 'tid' }, r.id), msg,
         h('span', { class: 'mv' },
-          h('button', { class: 'icon-btn', 'aria-label': 'move up', disabled: i === 0, onclick: () => { [rows[i - 1], rows[i]] = [rows[i], rows[i - 1]]; draw(); } }, '↑'),
-          h('button', { class: 'icon-btn', 'aria-label': 'move down', disabled: i === rows.length - 1, onclick: () => { [rows[i + 1], rows[i]] = [rows[i], rows[i + 1]]; draw(); } }, '↓')));
+          h('button', { class: 'icon-btn', type: 'button', 'data-f': 'up', 'aria-label': `Move ${r.id} up`, disabled: i === 0, onclick: () => move(-1, 'up') }, h('span', { 'aria-hidden': 'true' }, '↑')),
+          h('button', { class: 'icon-btn', type: 'button', 'data-f': 'down', 'aria-label': `Move ${r.id} down`, disabled: i === rows.length - 1, onclick: () => move(1, 'down') }, h('span', { 'aria-hidden': 'true' }, '↓'))));
     }));
+    if (focusId) {
+      const row = list.querySelector(`[data-id="${CSS.escape(focusId)}"]`);
+      // a row moved to the end has no "down" any more: the other move button, then its select
+      const t = row?.querySelector(`[data-f="${focusWhat}"]:not(:disabled)`) || row?.querySelector('[data-f="up"]:not(:disabled), [data-f="down"]:not(:disabled)') || row?.querySelector('[data-f]');
+      t?.focus();
+    }
   };
   draw();
   const m = modal('Interactive rebase', body, { wide: true, onClose: () => { if (!started) onCancel(); } });

@@ -10,6 +10,7 @@ import { renderSpeed } from './speed.js';
 import { setMuted } from './sound.js';
 import { applyTheme, applyAccent } from './theme.js';
 import { toast, ICON, setShapes } from './ui/fx.js';
+import { releaseAll } from './dom.js';
 import * as game from './ui/game.js';
 import { loadContent, nodeById, nodeForLevel, nodeStatus, currentNode, crowns, lessonItems, reviewItems, exerciseByKey, unitComplete } from './ui/path.js';
 import { renderOnboarding } from './ui/onboarding.js';
@@ -32,11 +33,28 @@ let pending = {}; // one-shot options for the next home render (popNode, message
 function screen(name) { document.body.dataset.screen = name; }
 function goHome(opts = {}) { pending = opts; if (location.hash === '#/' || location.hash === '') route(); else location.hash = '#/'; }
 
+// After a route change the focus goes to the new screen's heading (WCAG 2.4.3), unless the screen already put it
+// somewhere useful itself (the lesson's first prompt, a challenge's terminal, a celebration's heading).
+let booted = false;
+function focusScreen() {
+  if (!booted) { booted = true; return; } // the first paint keeps the browser's own start (the skip link first)
+  setTimeout(() => {
+    const a = document.activeElement;
+    if (document.querySelector('.modal-wrap') || (a && a !== document.body && a !== app && app.contains(a))) return;
+    const h1 = app.querySelector('h1');
+    if (!h1) { app.focus({ preventScroll: true }); return; }
+    if (!h1.hasAttribute('tabindex')) h1.setAttribute('tabindex', '-1');
+    h1.focus({ preventScroll: true });
+  }, 0);
+}
+
 function route() {
   if (typeof cleanup === 'function') cleanup();
   cleanup = null;
+  releaseAll();
   document.getElementById('modal-root').replaceChildren();
   window.scrollTo(0, 0);
+  focusScreen();
   const hash = location.hash.replace(/^#\/?/, '');
   const [page, rawArg] = hash.split('/');
   const arg = rawArg ? decodeURIComponent(rawArg) : '';

@@ -90,6 +90,18 @@ export function renderShop(root) {
   }
 
   function draw() {
+    // a redraw replaces the buttons: keep the keyboard focus on the same item's same control afterwards
+    const f = document.activeElement;
+    const was = f && f !== document.body ? { item: f.closest('[data-item]')?.dataset.item, tryBtn: f.classList.contains('shop-try'), preview: preview.contains(f), stash: !!f.closest('.stash-item') } : null;
+    redraw();
+    if (!was || document.activeElement !== document.body) return;
+    const card = was.item && list.querySelector(`[data-item="${CSS.escape(was.item)}"]`);
+    const target = was.preview ? previewAct.querySelector('button, a')
+      : was.stash ? list.querySelector('.stash-item button:not(:disabled)') || list.querySelector('.stash-item h3')
+      : card && (was.tryBtn ? card.querySelector('.shop-try') : card.querySelector('.shop-foot button:not(:disabled)') || card.querySelector('.shop-try'));
+    if (target) { if (!target.matches('button, a')) target.setAttribute('tabindex', '-1'); target.focus({ preventScroll: true }); }
+  }
+  function redraw() {
     showBalance();
     const sections = [];
     for (const s of SLOTS) {

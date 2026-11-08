@@ -108,6 +108,27 @@ export function layout(data, { mini = false, size = null, showGhosts = true } = 
   return { nodes, labels: lab, width, height, S, headId: data.head.id, mergeHead: data.mergeHead };
 }
 
+// The graph as words, for screen readers (the svg's accessible name; accessibility pass): where HEAD is, every
+// branch, remote branch and tag, then the commits oldest first with their parents. Long histories keep the newest
+// `max` commits. Pure, so tests/graph-describe.test.mjs can check it without a DOM.
+export function describeGraph(data, { showGhosts = true, max = 12 } = {}) {
+  const commits = (data.commits || []).filter((c) => showGhosts || !c.ghost);
+  if (!commits.length) return 'Commit graph: no commits yet.';
+  const short = (m) => { const s = String(m || '').split('\n')[0]; return s.length > 40 ? s.slice(0, 39) + '…' : s; };
+  const out = [`Commit graph, ${commits.length} commit${commits.length === 1 ? '' : 's'}.`];
+  const head = data.head || {};
+  if (head.branch) out.push(`HEAD is on ${head.branch}${head.id ? ` at ${head.id}` : ' (no commits yet)'}.`);
+  else if (head.id) out.push(`HEAD is detached at ${head.id}.`);
+  const refs = (o, word) => { const e = Object.entries(o || {}); return e.length ? `${word}: ${e.map(([n, id]) => `${n} at ${id}`).join(', ')}.` : null; };
+  out.push(refs(data.branches, 'Branches'), refs(data.remotes, 'Remote branches'), refs(data.tags, 'Tags'));
+  if (data.bisect) out.push(`Bisect: ${data.bisect.bad ? `bad ${data.bisect.bad}` : 'no bad commit yet'}${data.bisect.good?.length ? `, good ${data.bisect.good.join(', ')}` : ''}.`);
+  const shown = commits.slice(-max);
+  if (shown.length < commits.length) out.push(`Newest ${shown.length} commits:`);
+  else out.push('Commits, oldest first:');
+  out.push(shown.map((c) => `${c.id} "${short(c.msg)}"${c.parents?.length > 1 ? `, merge of ${c.parents.join(' and ')}` : c.parents?.length ? `, after ${c.parents[0]}` : ', first commit'}${c.ghost ? ', orphaned' : ''}`).join('; ') + '.');
+  return out.filter(Boolean).join(' ');
+}
+
 const ease = (t) => 1 - Math.pow(1 - t, 3);
 const lerp = (a, b, t) => a + (b - a) * t;
 
@@ -140,6 +161,7 @@ export class GraphView {
 
   render(data, { animate = true, showGhosts = true } = {}) {
     const target = layout(data, { mini: this.size === 'mini', size: this.size, showGhosts });
+    this.svg.setAttribute('aria-label', describeGraph(data, { showGhosts }));
     const from = { nodes: { ...this.disp.nodes }, labels: { ...this.disp.labels } };
     this.target = target;
     cancelAnimationFrame(this.raf);

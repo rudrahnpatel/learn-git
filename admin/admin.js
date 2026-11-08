@@ -7,7 +7,7 @@
 // Edits don't overwrite the player's devices blindly: the server stamps each one into the state
 // (state.adminEdits) and js/cloud/merge.js makes a lowered value stick against older copies while
 // keeping play the admin never saw on top. See .notes/user-accounts-supabase.md.
-import { h, confirmModal } from '../js/dom.js';
+import { h, confirmModal, holdFocus } from '../js/dom.js';
 import { applyTheme } from '../js/theme.js';
 import { toast } from '../js/ui/fx.js';
 import { walletOf, balance } from '../js/wallet.js';
@@ -128,7 +128,9 @@ async function loadPath() {
 // onChange(patch): patch = fields to update on the table row, or null when the user was removed.
 async function openEditor(sb, me, r, onChange) {
   const self = r.id === me.id;
-  const close = () => { wrap.remove(); document.removeEventListener('keydown', onKey); opener?.focus?.(); };
+  // a modal drawer: the page behind is inert and Tab stays inside (holdFocus); Escape closes; focus returns to the row
+  let hold = null;
+  const close = () => { wrap.remove(); document.removeEventListener('keydown', onKey); hold?.release({ restore: false }); opener?.focus?.(); };
   const opener = document.activeElement;
   const onKey = (e) => { if (e.key === 'Escape' && !document.querySelector('.modal-wrap')) close(); };
   const closeBtn = h('button', { class: 'icon-btn close', type: 'button', 'aria-label': 'Close', onclick: close }, '×');
@@ -137,6 +139,7 @@ async function openEditor(sb, me, r, onChange) {
   const drawer = h('aside', { class: 'drawer', role: 'dialog', 'aria-modal': 'true', 'aria-label': `Edit ${r.email}` }, head, body);
   const wrap = h('div', { class: 'drawer-wrap', onclick: (e) => { if (e.target === wrap) close(); } }, drawer);
   document.body.append(wrap);
+  hold = holdFocus(wrap);
   document.addEventListener('keydown', onKey);
   closeBtn.focus();
 

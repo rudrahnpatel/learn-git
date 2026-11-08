@@ -17,6 +17,7 @@ const FLAGS = {
 };
 
 export class Terminal {
+  static n = 0; // ids for each terminal's keyboard tip
   // collapse: show only the latest command and its output; earlier entries fold behind a quiet "earlier" button.
   constructor(container, { onCommand, getCompletions, history = [], onHistory, collapse = true }) {
     this.onCommand = onCommand;
@@ -28,14 +29,16 @@ export class Terminal {
     this.cur = null;
     this.showOld = false;
     this.moreOpen = false;
-    this.out = h('div', { class: 'term-out' + (collapse ? ' collapsed' : ''), role: 'log', 'aria-live': 'polite' });
+    // the output is a log region: each command's output is read as it arrives
+    this.out = h('div', { class: 'term-out' + (collapse ? ' collapsed' : ''), role: 'log', 'aria-live': 'polite', 'aria-label': 'Terminal output' });
     this.oldBtn = h('button', { class: 'term-old', type: 'button', hidden: true, 'aria-expanded': 'false', onclick: () => this.toggleOld() });
     this.promptEl = h('span', { class: 'prompt' }, '$');
-    this.input = h('input', { class: 'term-in', type: 'text', spellcheck: 'false', autocomplete: 'off', autocapitalize: 'off', 'aria-label': 'Command', placeholder: phone() ? 'git command…' : 'type a command, e.g. git status' });
-    this.chips = h('div', { class: 'chips', role: 'toolbar', 'aria-label': 'Suggested commands' });
-    this.chipsMore = h('div', { class: 'chips chips-more', hidden: true, role: 'toolbar', 'aria-label': 'More suggestions' });
+    const tip = h('span', { class: 'sr-only', id: 'term-tip-' + (++Terminal.n) }, 'Press Enter to run. Tab completes a name; with nothing left to complete, Tab moves on. Up and down arrows recall earlier commands.');
+    this.input = h('input', { class: 'term-in', type: 'text', spellcheck: 'false', autocomplete: 'off', autocapitalize: 'off', 'aria-label': 'Git command', 'aria-describedby': tip.id, placeholder: phone() ? 'git command…' : 'type a command, e.g. git status' });
+    this.chips = h('div', { class: 'chips', role: 'group', 'aria-label': 'Suggested commands' });
+    this.chipsMore = h('div', { class: 'chips chips-more', hidden: true, role: 'group', 'aria-label': 'More suggestions' });
     const form = h('form', { class: 'term-form', onsubmit: (e) => { e.preventDefault(); this.submit(); } },
-      this.promptEl, this.input, keepFocus(h('button', { class: 'run', type: 'submit', 'aria-label': 'Run' }, '⏎')));
+      this.promptEl, this.input, tip, keepFocus(h('button', { class: 'run', type: 'submit', 'aria-label': 'Run' }, h('span', { 'aria-hidden': 'true' }, '⏎'))));
     keepFocus(this.oldBtn);
     this.el = h('div', { class: 'terminal', onclick: (e) => { if (e.target === this.out || e.target === this.el) this.input.focus(); } }, this.oldBtn, this.out, this.chips, this.chipsMore, form);
     container.append(this.el);
@@ -134,13 +137,18 @@ export class Terminal {
     } else if (e.key === 'ArrowDown') {
       if (this.hIdx < this.history.length) { this.hIdx++; this.input.value = this.hIdx === this.history.length ? this.draft : this.history[this.hIdx]; }
       e.preventDefault();
-    } else if (e.key === 'Tab') {
+    } else if (e.key === 'Tab' && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey) {
+      // Tab completes; it is not a keyboard trap (WCAG 2.1.2): on an empty line, or when a second Tab in a row would
+      // change nothing, it moves the focus on as usual. Shift+Tab always moves back.
+      const again = this.lastTab === this.input.value;
+      if (!this.input.value.trim() || again) { this.lastTab = null; return; }
       e.preventDefault();
-      this.complete();
+      this.lastTab = this.complete() ? null : this.input.value;
     } else if (e.key === 'l' && e.ctrlKey) {
       e.preventDefault(); this.clear();
     }
   }
+  // Tab completion. Returns true when the line changed (a listing of several matches leaves it as it was).
   complete() {
     const v = this.input.value;
     const words = v.split(/\s+/);
@@ -158,11 +166,12 @@ export class Terminal {
     const prefixCut = cur.match(/^(.*[:.]{2}|--source=)?(.*)$/);
     const pre = prefixCut[1] || '', stem = prefixCut[2];
     const hits = [...new Set(cands)].filter((x) => x.startsWith(stem));
-    if (!hits.length) return;
-    if (hits.length === 1) { words[words.length - 1] = pre + hits[0]; this.input.value = words.join(' ') + ' '; return; }
+    if (!hits.length) return false;
+    if (hits.length === 1) { words[words.length - 1] = pre + hits[0]; this.input.value = words.join(' ') + ' '; return this.input.value !== v; }
     let common = hits[0];
     for (const x of hits) while (!x.startsWith(common)) common = common.slice(0, -1);
-    if (common.length > stem.length) { words[words.length - 1] = pre + common; this.input.value = words.join(' '); }
-    else this.print([{ t: hits.join('   '), c: 'hint' }]);
+    if (common.length > stem.length) { words[words.length - 1] = pre + common; this.input.value = words.join(' '); return true; }
+    this.print([{ t: hits.join('   '), c: 'hint' }]);
+    return false;
   }
 }
