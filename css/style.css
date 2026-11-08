@@ -92,7 +92,7 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; }
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; } /* no grey/blue flash on tap (Android Chrome); every control has its own pressed state, and :focus-visible rings still show for keyboards */
 body { background: var(--chalk); color: var(--ink); font: 400 16px/1.4 var(--sans); letter-spacing: -0.02em; -webkit-font-smoothing: antialiased; min-height: 100dvh; overflow-x: hidden; }
 b, strong, th, h1, h2, h3, h4, summary { font-weight: 400; }
 h1, h2, h3, p { margin: 0; }
