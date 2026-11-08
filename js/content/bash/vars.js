@@ -32,7 +32,7 @@ export default {
   blurb: 'Store values, quote them right, pass them on, and set up your shell.',
   challenges: [
     {
-      id: 'bash-dotfiles', title: 'Make it yours', blurb: 'A report in one line, and a shell set up to your taste.',
+      id: 'bash-dotfiles', title: 'Shell setup', blurb: 'A report in one line, and a shell set up to your taste.',
       exercises: [
         {
           id: 'vac-report', type: 'type', max: 6,

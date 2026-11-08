@@ -281,6 +281,13 @@ export default {
           explain: 'Reading needs r, running directly needs x, and <code>bash file</code> only reads.',
         },
         {
+          id: 'pm3-build', type: 'build',
+          prompt: 'Run <code>greet.sh</code> without giving it the x permission.',
+          tiles: ['bash', 'greet.sh', './greet.sh', 'chmod', '+x', 'cat'],
+          answers: [['bash', 'greet.sh']],
+          explain: '<code>bash greet.sh</code>: bash is the program that runs, greet.sh is just a file it reads.',
+        },
+        {
           id: 'pm3-fill', type: 'fill',
           prompt: 'Run the program <code>hello.sh</code> that is in the current folder.',
           before: '', after: 'hello.sh',
