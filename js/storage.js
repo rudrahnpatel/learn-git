@@ -24,6 +24,7 @@ export function freshState() {
     placement: 0,          // 0 new, 1 commit & push, 2 branch & merge, 3 rebase & rescue
     goal: 20,              // daily XP goal
     mute: false,
+    unlockAll: false,      // Settings > "Unlock all levels": every path node of the active course is open (never marks anything done)
     totalXp: 0,
     xpByDay: {},           // 'YYYY-MM-DD' -> xp
     // Field names predate the git-themed rewards and are kept so old saves load unchanged:
@@ -45,9 +46,10 @@ export function freshState() {
     // ---- course-aware layer (see .notes/learn-git-v2-ui.md, "Shop, profile and cards").
     // Global things (cherries, streak, XP history, cosmetics, achievements) stay at the top level;
     // anything that belongs to one course lives under courses[<course id>]. The older per-course
-    // fields above (placement, nodes, challenges, mistakes) are the git course's and stay where they
-    // are until a second course needs the move.
-    course: 'git',         // the active course
+    // fields above (placement, nodes, challenges, mistakes) are the git course's and stay at the top level
+    // for old saves; every other course keeps its own copy under courses[<id>] ({ nodes, challenges,
+    // mistakes, placement, cards, seenCards }), filled in on first use (game.courseProgress()).
+    course: 'git',         // the active course (js/courses.js)
     courses: { git: freshCourse() },
     cosmetics: { owned: {}, equipped: {} }, // item id -> timestamp; slot -> item id (global, any course)
   };

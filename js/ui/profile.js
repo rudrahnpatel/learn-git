@@ -41,7 +41,7 @@ export function heatWeeks(weeks) {
 // The furthest unit with a finished lesson -> "rebase ready" (COURSE.ready labels).
 function readyLabel() {
   let label = null;
-  for (const u of UNITS) if (u.lessons.some((l) => game.G.nodes[`${u.id}:lesson:${l.id}`]?.done)) label = COURSE.ready[u.id] || `${u.title.toLowerCase()} ready`;
+  for (const u of UNITS) if (u.lessons.some((l) => game.courseProgress().nodes[`${u.id}:lesson:${l.id}`]?.done)) label = COURSE.ready[u.id] || `${u.title.toLowerCase()} ready`;
   return label || 'just getting started';
 }
 export function profileStats() {
@@ -99,7 +99,7 @@ function heatmap() {
   const total = weeks.flat().filter(Boolean).reduce((a, d) => a + d.xp, 0);
   const legend = h('div', { class: 'heat-legend mono', 'aria-hidden': 'true' }, 'Less', [0, 1, 2, 3, 4].map((l) => h('span', { class: `heat-cell l${l}` })), 'More');
   return h('section', { class: 'card heat-card' },
-    h('div', { class: 'card-head' }, h('h2', {}, 'Your commit history'), h('span', { class: 'mono tiny' }, `${total} XP IN ${weeks.length} WEEKS`)),
+    h('div', { class: 'card-head' }, h('h2', {}, REWARDS.streak.history), h('span', { class: 'mono tiny' }, `${total} XP IN ${weeks.length} WEEKS`)),
     h('div', { class: 'heat-wrap' }, h('div', { class: 'heat-days mono', 'aria-hidden': 'true' }, DOW.map((d) => h('span', {}, d))),
       h('div', { class: 'heat-scroll' }, months, grid), tip),
     legend);
@@ -124,7 +124,7 @@ export function renderProfile(root) {
     stat('DAY STREAK', String(s.streak), 'yellow', REWARDS.streak.icon(s.streak > 0)),
     stat('LONGEST STREAK', String(s.best), 'sunbeam'),
     stat('TOTAL XP', String(s.xp), 'sky'),
-    stat('LESSONS MERGED', String(s.lessons), 'green'),
+    stat(`LESSONS ${REWARDS.words.finished.toUpperCase()}`, String(s.lessons), 'green'),
     stat(`${REWARDS.crate.many.toUpperCase()} OPENED`, String(s.crates), 'pink', REWARDS.crate.icon(true)),
     stat('ACCURACY', s.accuracy == null ? '–' : Math.round(s.accuracy * 100) + '%', 'sky'),
     stat('CARDS', `${s.cards.got}/${s.cards.total}`, 'yellow', ICON.book()));
@@ -186,7 +186,7 @@ export async function renderShareCard() {
   x.font = '400 40px Inter, sans-serif';
   x.fillText(`${s.cards.got} command${s.cards.got === 1 ? '' : 's'} · ${s.ready}`, 470, 316);
   x.fillStyle = mute; x.font = '400 26px Inter, sans-serif';
-  x.fillText(`${s.xp} XP · ${s.lessons} lessons merged · best ${REWARDS.streak.name} ${s.best}`, 470, 362);
+  x.fillText(`${s.xp} XP · ${s.lessons} lessons ${REWARDS.words.finished} · best ${REWARDS.streak.name} ${s.best}`, 470, 362);
   // heatmap strip: the last 26 weeks
   const weeks = heatWeeks(26), cell = 15, gap = 4, hx = 470, hy = 398;
   const lv = [tok('heat-0'), tok('heat-1'), tok('heat-2'), tok('heat-3'), tok('heat-4')];

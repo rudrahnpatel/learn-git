@@ -2,7 +2,7 @@
 // extended (a commit lands on your history line), quests and achievements, and the reward crate
 // (opened, then its release tag ships). Each step is one screen with one Continue button.
 import { h, announce, holdFocus, topLayer } from '../dom.js';
-import { REWARDS } from '../brand.js';
+import { REWARDS, say } from '../brand.js';
 import { sfx } from '../sound.js';
 import { twig } from './twig.js';
 import { ICON, confetti, countUp, setShapes, reducedMotion, accent, crateSVG, cherryBurst } from './fx.js';
@@ -67,30 +67,34 @@ export function mergeSVG({ branch = 'lesson/work', color = 'yellow' } = {}) {
   </svg>`;
 }
 
+// The branch-merging picture and its merge message show only for a course whose reward words have mergeHero
+// (git); other courses get the headline, the stats and the confetti.
 export function lessonCompleteStep({ title = REWARDS.lessonDone, xp, accuracy, timeMs, perfect, sub, branch = 'lesson/work', color = 'yellow' }) {
   return () => {
     setShapes('celebrate');
-    const t = twig({ mood: 'cheer', size: 104, text: perfect ? 'Flawless! Not a single slip.' : accuracy >= 0.8 ? 'Clean merge. Your brain just grew a branch.' : 'Merged! Mistakes are how commits get better.', side: 'right', cls: 'cel-twig' });
-    const merge = h('div', { class: 'merge-hero', html: mergeSVG({ branch, color }) });
+    const L = REWARDS.doneLines, hero = REWARDS.mergeHero;
+    const t = twig({ mood: 'cheer', size: 104, text: perfect ? L.perfect : accuracy >= 0.8 ? L.good : L.ok, side: 'right', cls: 'cel-twig' });
+    const merge = hero ? h('div', { class: 'merge-hero', html: mergeSVG({ branch, color }) }) : null;
     const cards = [
       statCard('TOTAL XP', 'yellow', xp, (n) => String(Math.round(n))),
       statCard('ACCURACY', 'green', Math.round(accuracy * 100), (n) => Math.round(n) + '%'),
       statCard('TIME', 'sky', timeMs, (n) => fmtTime(n)),
     ];
+    const head = h('h1', { class: 'cel-title' }, title);
     const el = h('div', { class: 'cel-body merge-body' }, t.el, merge,
-      h('h1', { class: 'cel-title' }, title),
-      h('p', { class: 'merge-msg mono' }, `Merge branch '${branch}' into main`),
+      head,
+      hero ? h('p', { class: 'merge-msg mono' }, `Merge branch '${branch}' into main`) : null,
       sub ? h('p', { class: 'cel-sub' }, sub) : null,
       perfect ? h('span', { class: 'tag-pill mono perfect-pill' }, '★ PERFECT +5 XP') : null,
       h('div', { class: 'stat-row' }, cards.map((c) => c.card)));
     return {
       el,
       onShow: () => {
-        const svg = merge.querySelector('svg');
+        const svg = merge?.querySelector('svg');
         const rm = reducedMotion();
-        requestAnimationFrame(() => requestAnimationFrame(() => svg.classList.add('go')));
+        if (svg) requestAnimationFrame(() => requestAnimationFrame(() => svg.classList.add('go')));
         sfx.complete();
-        setTimeout(() => { sfx.merge(); confetti(svg.querySelector('.mg-land'), { count: 56 }); }, rm ? 0 : 1250);
+        setTimeout(() => { if (svg) sfx.merge(); confetti(svg ? svg.querySelector('.mg-land') : head, { count: 56 }); }, rm ? 0 : svg ? 1250 : 500);
         cards.forEach((c, i) => { c.card.style.animationDelay = 900 + i * 140 + 'ms'; c.run(1050 + i * 160); });
       },
     };
@@ -122,16 +126,16 @@ export function commitLine({ land = false } = {}) {
       nodes += `<circle class="cl-today cl-ph" cx="${x}" cy="${Y}" r="11"/>`;
       nodes += `<g class="cl-new"><circle class="cl-done" cx="${x}" cy="${Y}" r="12"/></g>`;
     } else if (d.state === 'done') nodes += `<circle class="cl-done" cx="${x}" cy="${Y}" r="12"/>`;
-    else if (d.state === 'stashed') nodes += `<circle class="cl-stashed" cx="${x}" cy="${Y}" r="13"/><svg x="${x - 9}" y="${Y - 9}" width="18" height="18" viewBox="0 0 24 24">${ICON.stash().replace(/^<svg[^>]*>|<\/svg>$/g, '')}</svg>`;
+    else if (d.state === 'stashed') nodes += `<circle class="cl-stashed" cx="${x}" cy="${Y}" r="13"/><svg x="${x - 9}" y="${Y - 9}" width="18" height="18" viewBox="0 0 24 24">${REWARDS.freeze.icon().replace(/^<svg[^>]*>|<\/svg>$/g, '')}</svg>`;
     else if (d.state === 'today') nodes += `<circle class="cl-today" cx="${x}" cy="${Y}" r="11"/>`;
     else if (d.state === 'future') nodes += `<circle class="cl-fut" cx="${x}" cy="${Y}" r="6"/>`;
     else nodes += `<circle class="cl-miss" cx="${x}" cy="${Y}" r="5"/>`;
     nodes += `<text class="cl-l${i === ti ? ' now' : ''}" x="${x}" y="${Y + 34}">${d.label}</text>`;
   });
   const hx = X(ti);
-  const head = `<g class="cl-head${land ? ' moving' : ''}"><rect x="${hx - 23}" y="2" width="46" height="20" rx="10"/><text x="${hx}" y="16">HEAD</text><path d="M${hx - 5} 22 L${hx} 28 L${hx + 5} 22Z"/></g>`;
-  const label = days.map((d) => `${d.label}: ${d.state === 'stashed' ? 'saved by a stash' : d.state}`).join(', ');
-  return h('div', { class: 'commit-line', html: `<svg viewBox="0 0 284 88" role="img" aria-label="This week's commits. ${label}">${segs}${nodes}${head}</svg>` });
+  const head = `<g class="cl-head${land ? ' moving' : ''}"><rect x="${hx - 23}" y="2" width="46" height="20" rx="10"/><text x="${hx}" y="16">${REWARDS.streak.head}</text><path d="M${hx - 5} 22 L${hx} 28 L${hx + 5} 22Z"/></g>`;
+  const label = days.map((d) => `${d.label}: ${d.state === 'stashed' ? `saved by a ${REWARDS.freeze.one}` : d.state}`).join(', ');
+  return h('div', { class: 'commit-line', html: `<svg viewBox="0 0 284 88" role="img" aria-label="${REWARDS.streak.week}. ${label}">${segs}${nodes}${head}</svg>` });
 }
 
 export function streakStep(ev) {
@@ -139,12 +143,13 @@ export function streakStep(ev) {
     setShapes('celebrate');
     const count = h('span', { class: 'streak-big-n', 'aria-hidden': 'true' }, String(Math.max(0, ev.count - 1)));
     const line = commitLine({ land: true });
-    const msg = ev.milestone ? `${ev.milestone}-day milestone! That's a real habit, tagged and everything.` : ev.count === 1 ? 'Your first commit. Come back tomorrow to grow the line.' : 'Another commit on your history. See you tomorrow.';
+    const S = REWARDS.streakLines;
+    const msg = ev.milestone ? S.milestone(ev.milestone) : ev.count === 1 ? S.first : S.more;
     const el = h('div', { class: 'cel-body' },
       h('div', { class: 'streak-hero' },
-        h('span', { class: 'sh-ic', html: ICON.commit(true) }), count,
+        h('span', { class: 'sh-ic', html: REWARDS.streak.icon(true) }), count,
         h('span', { class: 'mono tiny sh-l' }, 'DAY STREAK')),
-      ev.milestone ? h('span', { class: 'tag-pill mono milestone-tag' }, h('span', { class: 'inline-ic', html: ICON.tag(false) }), `streak-${ev.milestone}`) : null,
+      ev.milestone && REWARDS.crate.tagged ? h('span', { class: 'tag-pill mono milestone-tag' }, h('span', { class: 'inline-ic', html: ICON.tag(false) }), `streak-${ev.milestone}`) : null,
       h('h1', { class: 'cel-title' }, 'Streak extended!', h('span', { class: 'sr-only' }, ` ${ev.count}-day streak.`)),
       h('p', { class: 'cel-sub' }, msg),
       h('div', { class: 'card week-card' }, line));
@@ -167,7 +172,7 @@ export function rewardsStep({ goalReached, questEvents = [], achievements = [] }
     const rows = [];
     if (goalReached) rows.push(h('div', { class: 'reward-row c-yellow' }, h('span', { class: 'rw-ic', html: ICON.bolt() }), h('div', {}, h('h3', {}, 'Daily goal reached'), h('p', {}, `${game.G.goal} XP today. Nice work.`))));
     for (const e of questEvents) {
-      if (e.type === 'quest') rows.push(h('div', { class: 'reward-row c-green' }, h('span', { class: 'rw-ic', html: ICON.check() }), h('div', {}, h('h3', {}, 'Quest complete'), h('p', {}, e.quest.text)), h('span', { class: 'rw-cherries' }, h('span', { html: REWARDS.currency.icon() }), `+${e.quest.cherries}`, h('span', { class: 'sr-only' }, ` ${REWARDS.currency.many}`))));
+      if (e.type === 'quest') rows.push(h('div', { class: 'reward-row c-green' }, h('span', { class: 'rw-ic', html: ICON.check() }), h('div', {}, h('h3', {}, 'Quest complete'), h('p', {}, say(e.quest.text))), h('span', { class: 'rw-cherries' }, h('span', { html: REWARDS.currency.icon() }), `+${e.quest.cherries}`, h('span', { class: 'sr-only' }, ` ${REWARDS.currency.many}`))));
       if (e.type === 'daily-release') rows.push(h('div', { class: 'reward-row c-pink' }, h('span', { class: 'rw-ic', html: ICON.crate(false) }), h('div', {}, h('h3', {}, 'All quests done'), h('p', {}, 'Today\'s daily crate is ready to open.'))));
     }
     for (const a of achievements) rows.push(h('div', { class: `reward-row ach c-${a.color}` }, h('span', { class: 'rw-ic', html: ICON.trophy() }), h('div', {}, h('span', { class: 'mono tiny' }, 'ACHIEVEMENT UNLOCKED'), h('h3', {}, a.title), h('p', {}, a.text))));
@@ -197,14 +202,17 @@ function crateTagSVG(version) {
 }
 
 // Reward crate overlay: tap the crate to open it; resolves with the reward ({ cherries, boost }).
-// The old release flavour stays as the finale: once the cherries are out, the tag ships.
-export function releaseOverlay({ version = 'v0.1.1', from = null, title = 'Reward crate', seed = '', label = `RELEASE ${version}` } = {}) {
+// In the git course the old release flavour stays as the finale: once the cherries are out, the tag ships.
+// A course whose crates aren't tagged (REWARDS.crate.tagged false) gets the crate and its reward only.
+export function releaseOverlay({ version = 'v0.1.1', from = null, title = 'Reward crate', seed = '', label } = {}) {
+  const tagged = REWARDS.crate.tagged, CUR = REWARDS.currency, B = REWARDS.boost, C = REWARDS.crate;
+  if (!label) label = tagged ? `RELEASE ${version}` : 'PATH REWARD';
   return new Promise((resolve) => {
     const root = document.getElementById('modal-root');
     const crate = h('span', { class: 'cs-crate', html: crateSVG({ cls: 'big', hinge: true }) });
-    const tag = h('span', { class: 'cs-tag' }, h('span', { class: 'cs-string' }), h('span', { html: crateTagSVG(version) }));
-    const stage = h('button', { class: 'release-stage crate-stage', type: 'button', 'aria-label': `Open the reward crate for release ${version}` }, crate, tag);
-    const cmd = h('p', { class: 'release-cmd mono' }, `$ git tag ${version} && git push --tags`);
+    const tag = tagged ? h('span', { class: 'cs-tag' }, h('span', { class: 'cs-string' }), h('span', { html: crateTagSVG(version) })) : null;
+    const stage = h('button', { class: 'release-stage crate-stage', type: 'button', 'aria-label': tagged ? `Open the reward crate for release ${version}` : 'Open the reward crate' }, crate, tag);
+    const cmd = tagged ? h('p', { class: 'release-cmd mono' }, `$ git tag ${version} && git push --tags`) : null;
     const msg = h('p', { class: 'cel-sub' }, 'Tap the crate to open it');
     const out = h('div', { class: 'release-reward' });
     const done = h('button', { class: 'btn primary big waiting', type: 'button', tabindex: '-1' }, 'Collect');
@@ -234,23 +242,25 @@ export function releaseOverlay({ version = 'v0.1.1', from = null, title = 'Rewar
         stage.classList.remove('shaking');
         stage.classList.add('opened');
         sfx.release();
-        cherryBurst(crate, { count: 10 });
+        cherryBurst(crate, { count: 10, icon: CUR.icon() });
         confetti(crate, { count: 26, spread: 0.7 });
-        msg.textContent = 'Cherries inside!';
-        announce(`Cherries inside! You cherry-picked ${reward.cherries} cherries.${reward.boost ? ' Fast-forward: 2 times XP for 15 minutes.' : ''}`);
+        msg.textContent = C.inside;
+        announce(`${C.said(reward.cherries)}${reward.boost ? ' ' + B.said : ''}`);
         const n = h('span', {}, '0');
         out.replaceChildren(...[
-          h('div', { class: 'rw-cherries big' }, h('span', { html: ICON.cherry() }), '+', n),
-          h('p', { class: 'release-picked' }, `Cherry-picked ${reward.cherries} cherries`),
-          reward.boost ? h('div', { class: 'boost-pill' }, h('span', { html: ICON.ff() }), 'Fast-forward! 2× XP for 15 min') : null].filter(Boolean));
+          h('div', { class: 'rw-cherries big' }, h('span', { html: CUR.icon() }), '+', n),
+          h('p', { class: 'release-picked' }, C.picked(reward.cherries)),
+          reward.boost ? h('div', { class: 'boost-pill' }, h('span', { html: B.icon() }), B.got) : null].filter(Boolean));
         countUp(n, reward.cherries, { ms: 700 });
       }, rm ? 0 : 680);
       // 2. finale: the tag ships
       setTimeout(() => {
         stage.classList.add('shipped');
-        cmd.textContent = from ? ` * [new tag]  ${from} -> ${version}` : ` * [new tag]  ${version} -> ${version}`;
-        cmd.classList.add('ok');
-        msg.textContent = `Shipped ${version}!`;
+        if (cmd) {
+          cmd.textContent = from ? ` * [new tag]  ${from} -> ${version}` : ` * [new tag]  ${version} -> ${version}`;
+          cmd.classList.add('ok');
+        }
+        msg.textContent = tagged ? `Shipped ${version}!` : 'All yours!';
         shipped = true;
         done.classList.remove('waiting');
         done.removeAttribute('tabindex');

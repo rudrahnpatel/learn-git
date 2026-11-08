@@ -12,7 +12,7 @@ import { applyTheme, applyAccent } from './theme.js';
 import { toast, ICON, setShapes } from './ui/fx.js';
 import { releaseAll } from './dom.js';
 import * as game from './ui/game.js';
-import { loadContent, nodeById, nodeForLevel, nodeStatus, currentNode, crowns, lessonItems, reviewItems, exerciseByKey, unitComplete } from './ui/path.js';
+import { loadContent, loadedCourse, nodeById, nodeForLevel, nodeStatus, currentNode, crowns, lessonItems, reviewItems, exerciseByKey, unitComplete } from './ui/path.js';
 import { renderOnboarding } from './ui/onboarding.js';
 import { renderHome } from './ui/home.js';
 import { playSession } from './ui/lesson.js';
@@ -22,7 +22,7 @@ import { renderPractice } from './ui/practice.js';
 import { renderShop } from './ui/shop.js';
 import { renderProfile } from './ui/profile.js';
 import { renderCards, cardRevealStep } from './ui/cards.js';
-import { REWARDS } from './brand.js';
+import { REWARDS, useRewards } from './brand.js';
 import { startCloud } from './cloud/sync.js';
 import { maybeSigninNudge } from './ui/account.js';
 import { track } from './analytics/track.js';
@@ -101,13 +101,15 @@ function lessonRoute(id) {
     onFinish: (res) => {
       track('lesson_done', { node: node.id, mode, reached: items.length, total: items.length, accuracy: res.accuracy, ms: res.timeMs });
       const wasDone = nodeStatus(node) === 'done';
+      const curBefore = currentNode()?.id;   // with "Unlock all levels" a node ahead of it may be finished: nothing new unlocks then
       const xp = game.XP.lesson + (res.perfect ? game.XP.perfect : 0) + res.bonusXp;
       const xpEvent = game.addXp(xp);
       game.finishLesson({ accuracy: res.accuracy, bestCombo: res.bestCombo });
       game.completeNode(node.id, { accuracy: res.accuracy });
       const newCards = node.kind === 'lesson' ? game.unlockCards(node.lesson.id) : [];
       markUnit(node);
-      celebrate({ title: node.kind === 'review' ? 'Review merged!' : REWARDS.lessonDone, xpEvent, res, popNode: wasDone ? null : currentNode()?.id, newCards,
+      const curAfter = currentNode()?.id;
+      celebrate({ title: node.kind === 'review' ? REWARDS.reviewDone : REWARDS.lessonDone, xpEvent, res, popNode: wasDone || curAfter === curBefore ? null : curAfter, newCards,
         branch: node.kind === 'review' ? `review/${branchSlug(node.unit.title)}` : `lesson/${branchSlug(node.title)}`, color: node.unit.color });
     },
   });
@@ -165,7 +167,7 @@ function mistakesRoute() {
       game.questProgress('practice');
       game.G.stats.bestCombo = Math.max(game.G.stats.bestCombo, res.bestCombo);
       game.save();
-      celebrate({ title: 'Fixes merged!', xpEvent, res: { ...res, perfect: false }, sub: `${res.reviewed} fixed. Each one is a little stronger now.`, branch: 'fix/old-mistakes', color: 'pink' });
+      celebrate({ title: REWARDS.mistakesDone, xpEvent, res: { ...res, perfect: false }, sub: `${res.reviewed} fixed. Each one is a little stronger now.`, branch: 'fix/old-mistakes', color: 'pink' });
     },
   });
 }
@@ -176,25 +178,44 @@ async function boot() {
   try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme()); } catch { /* old browsers */ }
   setMuted(game.G.mute);
   await loadContent();
+  useRewards(loadedCourse);   // the active course's reward words (js/brand.js)
   applyAccent(game.accentTheme());
   // Players with lessons already merged get those lessons' cards (no reveal: they are back pay).
-  game.grantCompletedCards(Object.entries(game.G.nodes).filter(([id, n]) => n?.done && id.includes(':lesson:')).map(([id]) => id.split(':lesson:')[1]));
+  game.grantCompletedCards(Object.entries(game.courseProgress().nodes).filter(([id, n]) => n?.done && id.includes(':lesson:')).map(([id]) => id.split(':lesson:')[1]));
   const ev = game.applyStreak();
-  if (ev?.poppedDays) pending = { message: ev.poppedDays === 1 ? '<code>git stash pop</code>: your streak survived yesterday. Phew!' : `<code>git stash pop</code> ×${ev.poppedDays}: your streak survived while you were away.` };
-  else if (ev?.lost) pending = { message: `Your ${ev.lost}-day streak ended. Time to <code>git init</code> a fresh one!` };
+  if (ev?.poppedDays) pending = { message: REWARDS.freeze.popped(ev.poppedDays) };
+  else if (ev?.lost) pending = { message: REWARDS.lost(ev.lost) };
   game.checkAchievements();
   game.takeAchievements();
   // analytics (a no-op without config, with Do Not Track / GPC, or off the production host)
   track('app_open', { pwa: matchMedia('(display-mode: standalone)').matches || navigator.standalone === true, onboarded: !!game.G.onboarded });
   window.addEventListener('hashchange', route);
+  // Settings and the course switcher (js/ui/settings.js) ask for a re-render: home after a course switch,
+  // else the current screen; then the focus goes to `focus` (the gear, the course pill) instead of the h1.
+  window.addEventListener('app:refresh', (e) => {
+    const { home = false, focus = null, switched = null } = e.detail || {};
+    if (switched) track('course_switch', switched);
+    const put = () => { const el = focus && document.querySelector(focus); if (el) el.focus({ preventScroll: true }); };
+    if (home && !(location.hash === '#/' || location.hash === '')) {
+      window.addEventListener('hashchange', () => setTimeout(put, 0), { once: true });
+      location.hash = '#/';
+    } else { route(); put(); }
+  });
   route();
   // Accounts (no-op with an empty js/cloud/config.js; supabase-js loads only for a signed-in browser).
   startCloud({
-    onReplaced: () => {   // another device's progress was merged in
+    onReplaced: async () => {   // another device's progress was merged in
       setMuted(game.G.mute);
       applyAccent(game.accentTheme());
-      const calm = ['home', 'profile', 'shop', 'cards', 'practice', 'onboard'].includes(document.body.dataset.screen);
-      if (calm && !document.querySelector('.modal-wrap')) route();
+      const calm = ['home', 'profile', 'shop', 'cards', 'practice', 'onboard'].includes(document.body.dataset.screen) && !document.querySelector('.modal-wrap');
+      // the other device switched course: follow it on a calm screen; mid-lesson keep the course being played
+      // (G.course goes back to it, so progress lands in the right course)
+      if (game.G.course !== loadedCourse) {
+        if (!calm) { game.G.course = loadedCourse; return; }
+        await loadContent(game.G.course);
+        useRewards(loadedCourse);
+      }
+      if (calm) route();
     },
     onSignedIn: (p) => { track('sign_in'); toast(`Signed in as ${p.name || p.email}. Your progress is synced.`, { icon: ICON.check(), ms: 3200 }); },
     onAuthError: (msg) => toast(msg, { icon: ICON.close(), ms: 3200 }),

@@ -32,6 +32,7 @@ export const EVENTS = {
   challenge_done: { level: id, stars: int(0, 3), moves: int(0, 10000), hints: int(0, 20) },
   milestone: { kind: oneOf('streak', 'achievement'), value: int(0, 100000), id },   // streak days, or an achievement id
   sign_in: {},
+  course_switch: { course: id, from: id },                          // the course switcher (js/ui/settings.js)
 };
 export const EVENT_NAMES = Object.keys(EVENTS);
 

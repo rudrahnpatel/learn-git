@@ -17,7 +17,9 @@
 //   mistakes             union; per key the copy with the later due
 //   quests               the later day; same day: progress max, claimed union, chest OR
 //   onboarded            OR
-//   goal, mute, course, placement, cosmetics.equipped and anything unknown: from the newer save (savedAt)
+//   courses              per course: cards/seenCards union; a non-git course's own nodes/challenges/mistakes
+//                        by the rules above; its placement (and anything else) from the newer save
+//   goal, mute, unlockAll, course, placement, cosmetics.equipped and anything unknown: from the newer save (savedAt)
 //   resetAt              a "reset everywhere" stamp: a copy from before the later reset is dropped whole
 //   adminEdits           edits made on /admin (supabase/schema.sql). Before the merge, a copy that hasn't
 //                        seen an edit is "rebased" onto it: the edited value replaces the one it was made
@@ -135,13 +137,19 @@ function mergeQuests(a = {}, b = {}) {
   for (const k of Object.keys(out)) if (typeof a[k] === 'boolean' || typeof b[k] === 'boolean') out[k] = !!(a[k] || b[k]);
   return out;
 }
-function mergeCourses(a = {}, b = {}) {
+// Per course: cards/seenCards union; a course other than git also keeps its path progress here (nodes,
+// challenges, mistakes: the same rules as git's top-level copies) and its placement and anything else
+// from the newer save. aNewer: a is the newer save.
+function mergeCourses(a = {}, b = {}, aNewer = false) {
   const out = {};
   for (const id of new Set([...Object.keys(a), ...Object.keys(b)])) {
     const x = isObj(a[id]) ? a[id] : {}, y = isObj(b[id]) ? b[id] : {};
-    const o = { ...clone(x), ...clone(y) };
+    const o = aNewer ? { ...clone(y), ...clone(x) } : { ...clone(x), ...clone(y) };
     o.cards = unionEarliest(x.cards, y.cards);
     o.seenCards = unionEarliest(x.seenCards, y.seenCards);
+    if ('nodes' in x || 'nodes' in y) o.nodes = mergeNodes(x.nodes, y.nodes);
+    if ('challenges' in x || 'challenges' in y) o.challenges = mergeChallenges(x.challenges, y.challenges);
+    if ('mistakes' in x || 'mistakes' in y) o.mistakes = mergeMistakes(x.mistakes, y.mistakes);
     out[id] = o;
   }
   return out;
@@ -199,7 +207,9 @@ function rebase(s, E) {
   for (const [cid, at] of Object.entries(E.courses)) {
     if (num(own.courses?.[cid]) >= at) continue;
     for (const f of COURSE_FIELDS[cid] || []) out[f] = {};
-    if (isObj(out.courses?.[cid])) out.courses[cid] = { ...out.courses[cid], cards: {}, seenCards: {} };
+    // any other course keeps its path progress under courses[<id>]: the reset clears it there
+    const wipe = COURSE_FIELDS[cid] ? {} : { nodes: {}, challenges: {}, mistakes: {} };
+    if (isObj(out.courses?.[cid])) out.courses[cid] = { ...out.courses[cid], ...wipe, cards: {}, seenCards: {} };
   }
   const nodesReset = num(own.courses?.[NODE_COURSE]) < num(E.courses[NODE_COURSE]);
   for (const [id, e] of Object.entries(E.nodes)) {
@@ -276,7 +286,7 @@ export function mergeStates(a, b) {
   out.mistakes = mergeMistakes(a.mistakes, b.mistakes);
   out.stats = mergeStats(a.stats, b.stats);
   out.seen = unionEarliest(a.seen, b.seen);
-  out.courses = mergeCourses(a.courses, b.courses);
+  out.courses = mergeCourses(a.courses, b.courses, newer === a);
   out.cosmetics = {
     owned: unionEarliest(a.cosmetics?.owned, b.cosmetics?.owned),
     equipped: clone(newer.cosmetics?.equipped ?? older.cosmetics?.equipped ?? {}),

@@ -73,14 +73,15 @@ export function confetti(from, { count = 46, spread = 1 } = {}) {
   }
 }
 
-// Cherries bursting up and out of an element (an opened crate), then falling away.
-export function cherryBurst(from, { count = 9 } = {}) {
+// The currency bursting up and out of an element (an opened crate), then falling away. icon: the course's
+// currency glyph (js/brand.js); cherries by default.
+export function cherryBurst(from, { count = 9, icon = ICON.cherry() } = {}) {
   const fx = document.getElementById('fx');
   if (!fx || !from || reducedMotion()) return;
   const r = from.getBoundingClientRect();
   const x = r.left + r.width / 2, y = r.top + r.height / 2;
   for (let i = 0; i < count; i++) {
-    const el = h('div', { class: 'confetto cherry-bit', html: ICON.cherry() });
+    const el = h('div', { class: 'confetto cherry-bit', html: icon });
     const size = 26 + Math.random() * 14;
     el.style.left = x + 'px'; el.style.top = y + 'px'; el.style.width = el.style.height = size + 'px';
     fx.append(el);
@@ -166,6 +167,13 @@ export const ICON = {
   flame: (lit = true, onCombo = false) => `<svg viewBox="0 0 24 24" class="ic-flame${lit ? '' : ' out'}" aria-hidden="true"><path d="M12 2c1 4 6 6 6 12a6 6 0 0 1-12 0c0-3 1.5-4.5 3-6 0 2 1 3 2 3 0-4-1-6 1-9z" fill="${!lit ? 'var(--frost-2)' : onCombo ? 'var(--on-combo)' : 'var(--combo)'}"/><path d="M12 12c.5 2 3 3 3 5.5a3 3 0 0 1-6 0c0-1.6 1-2.4 1.6-3 .2 1 .7 1.4 1.1 1.4 0-1.6-.4-2.5.3-3.9z" fill="${lit ? 'var(--yellow)' : 'var(--frost)'}"/></svg>`,
   // The currency: a pair of paper-cut cherries (you cherry-pick them).
   cherry: () => '<svg viewBox="0 0 24 24" class="ic-cherry" aria-hidden="true"><path d="M7.5 15.5C8.5 10 11 6.5 15.5 3.5M16.5 16C15.5 11 15 7 15.5 3.5" stroke="var(--ink)" stroke-width="1.8" fill="none" stroke-linecap="round"/><path d="M15.5 3.5C18 1.5 21.5 2 23 4 20.5 6 17.5 5.8 15.5 3.5Z" fill="var(--green)"/><circle cx="7" cy="17" r="5.5" fill="var(--red)"/><circle cx="17" cy="17.5" r="5" fill="var(--red)"/><circle cx="5" cy="15" r="1.5" fill="var(--pink)"/><circle cx="15.2" cy="15.6" r="1.3" fill="var(--pink)"/></svg>',
+  // The neutral currency (courses without their own reward words): a flat paper-cut coin.
+  coin: () => '<svg viewBox="0 0 24 24" class="ic-coin" aria-hidden="true"><circle cx="12" cy="13" r="9" fill="var(--ink)"/><circle cx="12" cy="11" r="9" fill="var(--yellow)"/><circle cx="12" cy="11" r="5.2" fill="none" stroke="var(--ink)" stroke-width="1.6" opacity=".35"/><path d="M12 7.5v7" stroke="var(--ink)" stroke-width="1.8" stroke-linecap="round" opacity=".7"/></svg>',
+  // The neutral streak saver: a paper-cut shield.
+  shield: () => '<svg viewBox="0 0 24 24" class="ic-shield" aria-hidden="true"><path d="M12 2l8.5 3.2v6.3c0 5-3.6 8.9-8.5 10.5C7.1 20.4 3.5 16.5 3.5 11.5V5.2z" fill="var(--sky)"/><path d="M12 2v20c4.9-1.6 8.5-5.5 8.5-10.5V5.2z" fill="var(--ink)" opacity=".18"/><path d="M8.2 11.8l2.6 2.6 5-5.2" stroke="var(--ink)" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  // Settings: a gear.
+  gear: () => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.3 2h3.4l.5 2.7 1.9.8 2.3-1.6 2.4 2.4-1.6 2.3.8 1.9 2.7.5v3.4l-2.7.5-.8 1.9 1.6 2.3-2.4 2.4-2.3-1.6-1.9.8-.5 2.7h-3.4l-.5-2.7-1.9-.8-2.3 1.6-2.4-2.4 1.6-2.3-.8-1.9L2 13.7v-3.4l2.7-.5.8-1.9-1.6-2.3 2.4-2.4 2.3 1.6 1.9-.8z" fill="currentColor"/><circle cx="12" cy="12" r="3.4" fill="var(--paper)"/></svg>',
+  chevron: () => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9.5l5 5 5-5" stroke="currentColor" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   crown: () => '<svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="2,7 7,12 12,4 17,12 22,7 20,20 4,20" fill="var(--yellow)"/></svg>',
   // A release tag (the path's reward nodes). Shipped: green tag with a check.
   tag: (shipped = false) => shipped
